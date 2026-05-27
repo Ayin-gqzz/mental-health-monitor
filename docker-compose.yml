@@ -1,0 +1,28 @@
+version: "3.9"
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data/数据集.csv:/app/data/数据集.csv:ro
+    environment:
+      - DATABASE_URL=sqlite:///./mental_health.db
+      - JWT_SECRET=change-this-in-production
+      - CSV_PATH=/app/data/数据集.csv
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_TARGET=http://backend:8000
+    depends_on:
+      - backend
+    restart: unless-stopped

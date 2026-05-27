@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Environment
+.env
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Build
+dist/
+dist-ssr/
+
+# Git
+.git/
+.gitignore
+
+# Data (volume-mounted at runtime)
+data/
+
+# Docs
+*.md
