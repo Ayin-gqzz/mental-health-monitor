@@ -2,10 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import hash_password, verify_password, create_token
+from app.core.security import hash_password, verify_password, create_token, require_role
 from app.models.student import StudentInfo
 from app.models.user import CounselorUser
-from app.schemas.auth import LoginRequest, StudentRegisterRequest, TokenResponse
+from app.schemas.auth import LoginRequest, StudentRegisterRequest, TokenResponse, CounselorRegisterRequest, PasswordChangeRequest
 
 router = APIRouter()
 
@@ -57,3 +57,44 @@ def login_counselor(req: LoginRequest, db: Session = Depends(get_db)):
             display_name=user.display_name, user_id=str(user.id),
         )
     raise HTTPException(status_code=401, detail="Invalid credentials")
+
+
+@router.post("/register/counselor", response_model=TokenResponse)
+def register_counselor(req: CounselorRegisterRequest, db: Session = Depends(get_db)):
+    existing = db.query(CounselorUser).filter(CounselorUser.username == req.username).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Username already taken")
+
+    counselor = CounselorUser(
+        username=req.username,
+        password_hash=hash_password(req.password),
+        display_name=req.display_name,
+    )
+    db.add(counselor)
+    db.commit()
+    db.refresh(counselor)
+
+    token = create_token({"sub": str(counselor.id), "role": "counselor"})
+    return TokenResponse(
+        access_token=token, role="counselor",
+        display_name=counselor.display_name, user_id=str(counselor.id),
+    )
+
+
+@router.put("/counselor/password")
+def change_counselor_password(
+    req: PasswordChangeRequest,
+    user: dict = Depends(require_role("counselor")),
+):
+    db = user["db"]
+    counselor_id = int(user["sub"])
+    counselor = db.query(CounselorUser).filter(CounselorUser.id == counselor_id).first()
+    if not counselor:
+        raise HTTPException(404, "Counselor not found")
+
+    if not verify_password(req.old_password, counselor.password_hash):
+        raise HTTPException(400, "Old password is incorrect")
+
+    counselor.password_hash = hash_password(req.new_password)
+    db.commit()
+    return {"status": "ok"}

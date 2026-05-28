@@ -7,7 +7,7 @@ class MentalAssessment(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     student_id = Column(String(20), ForeignKey("student_info.student_id", ondelete="CASCADE"), nullable=False)
-    assessment_date = Column(Date, nullable=False, server_default=text("(CURDATE())"))
+    assessment_date = Column(Date, nullable=False, server_default=text("(date('now'))"))
     depression_predicted = Column(Boolean, nullable=False)
     depression_probability = Column(Float, nullable=False)
     risk_level = Column(String(10), nullable=False)

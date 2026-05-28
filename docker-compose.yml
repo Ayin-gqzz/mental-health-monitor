@@ -13,6 +13,12 @@ services:
       - DATABASE_URL=sqlite:///./mental_health.db
       - JWT_SECRET=change-this-in-production
       - CSV_PATH=/app/data/数据集.csv
+    command: >
+      sh -c "python ml/train.py &&
+             python scripts/seed_db.py &&
+             python scripts/simulate_behavior.py &&
+             python scripts/assess_all.py &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000"
     restart: unless-stopped
 
   frontend:

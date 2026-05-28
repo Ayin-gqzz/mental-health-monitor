@@ -14,13 +14,26 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import (
     accuracy_score, precision_score, recall_score, f1_score,
     roc_auc_score, confusion_matrix, classification_report,
+    roc_curve, precision_recall_curve, average_precision_score,
 )
+from sklearn.model_selection import learning_curve
 from imblearn.over_sampling import SMOTE
 import joblib
 
 ML_DIR = os.path.dirname(os.path.abspath(__file__))
-CSV_PATH = os.path.join(ML_DIR, "..", "..", "..", "数据集.csv")
-CSV_PATH = os.path.normpath(CSV_PATH)
+
+
+def find_csv():
+    if env := os.getenv("CSV_PATH"):
+        return env
+    p = os.path.join(ML_DIR, "..", "..", "data", "数据集.csv")
+    if os.path.exists(p):
+        return os.path.normpath(p)
+    p = os.path.join(ML_DIR, "..", "..", "..", "数据集.csv")
+    return os.path.normpath(p)
+
+
+CSV_PATH = find_csv()
 
 
 def main():
@@ -38,17 +51,31 @@ def main():
     df["Gender_Enc"] = df["Gender"].map({"Male": 0, "Female": 1})
     df_encoded = pd.get_dummies(df, columns=["Department"], prefix="dept")
 
+    # Engineered features
+    median_stress = df_encoded["Stress_Level"].median()
+    df_encoded["Stress_Change_Rate"] = (df_encoded["Stress_Level"] - median_stress) / median_stress
+    df_encoded["Sleep_Quality_Index"] = df_encoded["Sleep_Duration"] * (1 - df_encoded["Stress_Level"] / 10)
+    df_encoded["Lifestyle_Score"] = (
+        0.30 * (df_encoded["Sleep_Duration"] / 12) +
+        0.20 * (df_encoded["Physical_Activity"] / 200) +
+        0.20 * (1 - df_encoded["Stress_Level"] / 10) +
+        0.15 * (df_encoded["Study_Hours"] / 10) +
+        0.15 * (1 - df_encoded["Social_Media_Hours"] / 10)
+    )
+
     feature_cols = [
         "Age", "Gender_Enc", "CGPA", "Sleep_Duration", "Study_Hours",
         "Social_Media_Hours", "Physical_Activity", "Stress_Level",
         "dept_Arts", "dept_Business", "dept_Engineering", "dept_Medical", "dept_Science",
+        "Stress_Change_Rate", "Sleep_Quality_Index", "Lifestyle_Score",
     ]
 
     X = df_encoded[feature_cols].copy()
     y = df_encoded["Depression"].map({True: 1, False: 0}).values
 
     numeric_cols = ["Age", "CGPA", "Sleep_Duration", "Study_Hours",
-                    "Social_Media_Hours", "Physical_Activity", "Stress_Level"]
+                    "Social_Media_Hours", "Physical_Activity", "Stress_Level",
+                    "Stress_Change_Rate", "Sleep_Quality_Index", "Lifestyle_Score"]
 
     print(f"  Features: {len(feature_cols)}, Positive samples: {y.sum()} ({y.sum()/len(y)*100:.1f}%)")
 
@@ -124,8 +151,49 @@ def main():
     joblib.dump(feature_cols, features_path)
     joblib.dump(numeric_cols, numeric_path)
 
+    # Save feature metadata for prediction-time feature engineering
+    feature_metadata = {
+        "median_stress": float(median_stress),
+        "lifestyle_weights": {
+            "sleep": 0.30, "activity": 0.20, "stress_inv": 0.20,
+            "study": 0.15, "social_inv": 0.15,
+        },
+    }
+    joblib.dump(feature_metadata, os.path.join(ML_DIR, "feature_metadata.pkl"))
+
+    # Save evaluation curve data
+    fpr, tpr, roc_thresholds = roc_curve(y_test, y_proba)
+    precision_arr, recall_arr, pr_thresholds = precision_recall_curve(y_test, y_proba)
+
+    train_sizes, train_scores, val_scores = learning_curve(
+        grid.best_estimator_, X_train_scaled, y_train,
+        cv=3, scoring="f1", n_jobs=-1,
+        train_sizes=np.linspace(0.1, 1.0, 5),
+    )
+
+    evaluation_curves = {
+        "roc": {
+            "fpr": fpr.tolist(), "tpr": tpr.tolist(),
+            "thresholds": roc_thresholds.tolist(), "auc": float(auc),
+        },
+        "pr": {
+            "precision": precision_arr.tolist(), "recall": recall_arr.tolist(),
+            "thresholds": pr_thresholds.tolist(),
+            "average_precision": float(average_precision_score(y_test, y_proba)),
+        },
+        "learning": {
+            "train_sizes": train_sizes.tolist(),
+            "train_scores_mean": train_scores.mean(axis=1).tolist(),
+            "train_scores_std": train_scores.std(axis=1).tolist(),
+            "val_scores_mean": val_scores.mean(axis=1).tolist(),
+            "val_scores_std": val_scores.std(axis=1).tolist(),
+        },
+    }
+    joblib.dump(evaluation_curves, os.path.join(ML_DIR, "evaluation_curves.pkl"))
+
     print(f"\n  Artifacts saved to {ML_DIR}/")
     print(f"    model.pkl, scaler.pkl, feature_cols.pkl, numeric_cols.pkl")
+    print(f"    feature_metadata.pkl, evaluation_curves.pkl")
     print("\n" + "=" * 60)
     print("Training complete!")
     print("=" * 60)

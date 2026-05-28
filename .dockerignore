@@ -9,6 +9,9 @@ node_modules/
 *.db-shm
 *.db-wal
 
+# ML model (regenerated via train.py)
+**/model.pkl
+
 # Python
 __pycache__/
 *.py[cod]

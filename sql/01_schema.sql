@@ -62,3 +62,59 @@ CREATE TABLE IF NOT EXISTS counselor_user (
     display_name  VARCHAR(50) NOT NULL,
     created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+-- ============================================================
+-- Table 5: risk_notification — auto-generated high-risk alerts
+-- ============================================================
+CREATE TABLE IF NOT EXISTS risk_notification (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id  VARCHAR(20) NOT NULL,
+    risk_level  VARCHAR(10) NOT NULL,
+    message     TEXT,
+    is_read     BOOLEAN DEFAULT 0,
+    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (student_id) REFERENCES student_info(student_id) ON DELETE CASCADE
+);
+
+-- ============================================================
+-- Views
+-- ============================================================
+
+-- View: latest assessment per student
+CREATE VIEW IF NOT EXISTS v_latest_assessment AS
+SELECT ma.*
+FROM mental_assessment ma
+INNER JOIN (
+    SELECT student_id, MAX(assessment_date) AS max_date
+    FROM mental_assessment
+    GROUP BY student_id
+) latest ON ma.student_id = latest.student_id AND ma.assessment_date = latest.max_date;
+
+-- View: student behavior summary
+CREATE VIEW IF NOT EXISTS v_student_behavior_summary AS
+SELECT
+    bl.student_id,
+    si.name,
+    si.department,
+    ROUND(AVG(bl.stress_level), 2) AS avg_stress,
+    ROUND(AVG(bl.sleep_duration), 2) AS avg_sleep,
+    ROUND(AVG(bl.social_media_hours), 2) AS avg_social,
+    ROUND(AVG(bl.physical_activity), 2) AS avg_activity,
+    COUNT(*) AS record_count
+FROM behavior_log bl
+JOIN student_info si ON bl.student_id = si.student_id
+GROUP BY bl.student_id, si.name, si.department;
+
+-- ============================================================
+-- Triggers
+-- ============================================================
+
+-- Trigger: auto-insert notification on high-risk assessment
+CREATE TRIGGER IF NOT EXISTS trg_high_risk_alert
+AFTER INSERT ON mental_assessment
+WHEN NEW.risk_level = 'high'
+BEGIN
+    INSERT INTO risk_notification (student_id, risk_level, message)
+    VALUES (NEW.student_id, NEW.risk_level,
+            'Student ' || NEW.student_id || ' assessed as HIGH risk on ' || NEW.assessment_date);
+END;

@@ -16,6 +16,17 @@ class StudentRegisterRequest(BaseModel):
     cgpa: float
 
 
+class CounselorRegisterRequest(BaseModel):
+    username: str
+    password: str
+    display_name: str
+
+
+class PasswordChangeRequest(BaseModel):
+    old_password: str
+    new_password: str
+
+
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"

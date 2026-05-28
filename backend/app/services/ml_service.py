@@ -25,10 +25,23 @@ class MLService:
     def _load(self):
         if self._loaded:
             return
-        self.model = joblib.load(os.path.join(ML_DIR, "model.pkl"))
-        self.scaler = joblib.load(os.path.join(ML_DIR, "scaler.pkl"))
-        self.feature_cols = joblib.load(os.path.join(ML_DIR, "feature_cols.pkl"))
-        self.numeric_cols = joblib.load(os.path.join(ML_DIR, "numeric_cols.pkl"))
+        model_path = os.path.join(ML_DIR, "model.pkl")
+        scaler_path = os.path.join(ML_DIR, "scaler.pkl")
+        feature_path = os.path.join(ML_DIR, "feature_cols.pkl")
+        numeric_path = os.path.join(ML_DIR, "numeric_cols.pkl")
+
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(
+                f"Model not found at {model_path}. Run: python ml/train.py"
+            )
+
+        self.model = joblib.load(model_path)
+        self.scaler = joblib.load(scaler_path)
+        self.feature_cols = joblib.load(feature_path)
+        self.numeric_cols = joblib.load(numeric_path)
+
+        metadata_path = os.path.join(ML_DIR, "feature_metadata.pkl")
+        self.feature_metadata = joblib.load(metadata_path) if os.path.exists(metadata_path) else None
         self._loaded = True
 
     def predict(self, profile: dict, behavior: dict) -> MentalAssessmentResult:
@@ -44,6 +57,27 @@ class MLService:
         row["Social_Media_Hours"] = behavior["social_media_hours"]
         row["Physical_Activity"] = behavior["physical_activity"]
         row["Stress_Level"] = behavior["stress_level"]
+
+        # Engineered features
+        if "Stress_Change_Rate" in self.feature_cols:
+            median_s = self.feature_metadata["median_stress"] if self.feature_metadata else 5.0
+            row["Stress_Change_Rate"] = (behavior["stress_level"] - median_s) / median_s
+
+        if "Sleep_Quality_Index" in self.feature_cols:
+            row["Sleep_Quality_Index"] = behavior["sleep_duration"] * (1 - behavior["stress_level"] / 10)
+
+        if "Lifestyle_Score" in self.feature_cols:
+            w = self.feature_metadata["lifestyle_weights"] if self.feature_metadata else {
+                "sleep": 0.30, "activity": 0.20, "stress_inv": 0.20,
+                "study": 0.15, "social_inv": 0.15,
+            }
+            row["Lifestyle_Score"] = (
+                w["sleep"] * (behavior["sleep_duration"] / 12) +
+                w["activity"] * (behavior["physical_activity"] / 200) +
+                w["stress_inv"] * (1 - behavior["stress_level"] / 10) +
+                w["study"] * (behavior["study_hours"] / 10) +
+                w["social_inv"] * (1 - behavior["social_media_hours"] / 10)
+            )
 
         dept_col = f"dept_{profile['department']}"
         if dept_col in row:

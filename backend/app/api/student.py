@@ -90,7 +90,7 @@ def get_behavior_trend(user: dict = Depends(require_role("student"))):
     end = date.today()
     start = end - timedelta(weeks=12)
     rows = db.query(
-        func.date_format(BehaviorLog.record_date, "%Y-W%u").label("week"),
+        func.strftime("%Y-W%W", BehaviorLog.record_date).label("week"),
         func.avg(BehaviorLog.stress_level).label("avg_stress"),
         func.avg(BehaviorLog.sleep_duration).label("avg_sleep"),
         func.avg(BehaviorLog.study_hours).label("avg_study"),
@@ -162,7 +162,7 @@ def get_dashboard(user: dict = Depends(require_role("student"))):
     end = date.today()
     start = end - timedelta(weeks=12)
     trend_rows = db.query(
-        func.date_format(BehaviorLog.record_date, "%Y-W%u").label("week"),
+        func.strftime("%Y-W%W", BehaviorLog.record_date).label("week"),
         func.avg(BehaviorLog.stress_level).label("avg_stress"),
         func.avg(BehaviorLog.sleep_duration).label("avg_sleep"),
     ).filter(

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getDepartmentStats, getTrends, getComplexQuery, type DepartmentStats, type ComplexQueryResult } from "../../api/counselor";
+import { getDepartmentStats, getTrends, getComplexQuery, getStressDistribution, type DepartmentStats, type ComplexQueryResult } from "../../api/counselor";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 
 export default function StatisticsPage() {
@@ -7,10 +7,12 @@ export default function StatisticsPage() {
   const [trends, setTrends] = useState<any[]>([]);
   const [queryResult, setQueryResult] = useState<ComplexQueryResult | null>(null);
   const [queryLoading, setQueryLoading] = useState(false);
+  const [stressDist, setStressDist] = useState<any[]>([]);
 
   useEffect(() => {
     getDepartmentStats().then(setDeptStats);
     getTrends().then(setTrends);
+    getStressDistribution().then(setStressDist);
   }, []);
 
   const runQuery = async () => {
@@ -52,6 +54,21 @@ export default function StatisticsPage() {
           </ResponsiveContainer>
         </div>
       </div>
+
+      {stressDist.length > 0 && (
+        <div style={{ background: "#fff", borderRadius: 12, padding: 20, boxShadow: "0 2px 8px rgba(0,0,0,0.08)", marginBottom: 24 }}>
+          <h3 style={{ marginBottom: 16 }}>压力水平分布</h3>
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={stressDist}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="stress_level" fontSize={11} label={{ value: "压力等级", position: "insideBottom", offset: -5 }} />
+              <YAxis fontSize={11} label={{ value: "学生人数", angle: -90, position: "insideLeft" }} />
+              <Tooltip />
+              <Bar dataKey="count" fill="#e94560" name="学生人数" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      )}
 
       <div style={{ background: "#fff", borderRadius: 12, padding: 20, boxShadow: "0 2px 8px rgba(0,0,0,0.08)", marginBottom: 24 }}>
         <h3 style={{ marginBottom: 16 }}>院系总览</h3>

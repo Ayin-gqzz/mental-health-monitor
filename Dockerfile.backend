@@ -10,6 +10,7 @@ COPY backend/ .
 EXPOSE 8000
 
 CMD ["sh", "-c", "\
+    python ml/train.py && \
     python scripts/seed_db.py && \
     python scripts/simulate_behavior.py && \
     python scripts/assess_all.py && \

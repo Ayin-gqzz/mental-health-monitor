@@ -20,6 +20,7 @@ python -m venv venv
 source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 cp ../.env.example .env
+python ml/train.py
 python scripts/seed_db.py
 python scripts/simulate_behavior.py
 python scripts/assess_all.py
@@ -82,7 +83,7 @@ Copy `.env.example` to `backend/.env` and adjust:
 
 ## ML Model
 
-Trained XGBoost classifier using lifestyle features to predict depression risk. Artifacts in `backend/ml/`. Re-train:
+Random Forest classifier trained on lifestyle features to predict depression risk. Model artifacts: `scaler.pkl`, `feature_cols.pkl`, `numeric_cols.pkl` (committed). The large `model.pkl` is excluded — run training to generate it:
 
 ```bash
 cd backend

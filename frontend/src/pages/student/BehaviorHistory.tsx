@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
-import { getBehaviorHistory, type BehaviorLatest } from "../../api/student";
+import { getBehaviorHistory, getBehaviorTrend, type BehaviorLatest } from "../../api/student";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 
 export default function BehaviorHistory() {
   const [items, setItems] = useState<BehaviorLatest[]>([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [trend, setTrend] = useState<any[]>([]);
 
   useEffect(() => {
     getBehaviorHistory(page).then((res) => {
@@ -13,9 +15,32 @@ export default function BehaviorHistory() {
     });
   }, [page]);
 
+  useEffect(() => {
+    getBehaviorTrend().then(setTrend);
+  }, []);
+
   return (
     <div>
       <h1 style={{ marginBottom: 24 }}>行为记录</h1>
+
+      {trend.length > 0 && (
+        <div style={{ background: "#fff", borderRadius: 12, padding: 20, boxShadow: "0 2px 8px rgba(0,0,0,0.08)", marginBottom: 24 }}>
+          <h3 style={{ marginBottom: 16 }}>个人趋势（12周）</h3>
+          <ResponsiveContainer width="100%" height={250}>
+            <LineChart data={trend}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="week" fontSize={11} />
+              <YAxis fontSize={11} />
+              <Tooltip />
+              <Legend />
+              <Line type="monotone" dataKey="avg_stress" stroke="#e94560" name="平均压力" strokeWidth={2} />
+              <Line type="monotone" dataKey="avg_sleep" stroke="#3b82f6" name="平均睡眠(h)" strokeWidth={2} />
+              <Line type="monotone" dataKey="avg_study" stroke="#8b5cf6" name="平均学习(h)" strokeWidth={2} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      )}
+
       <div style={{ background: "#fff", borderRadius: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.08)", overflow: "hidden" }}>
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>

@@ -39,3 +39,6 @@ Thumbs.db
 # Logs
 *.log
 
+# ML model (too large, regenerated via train.py)
+backend/ml/model.pkl
+

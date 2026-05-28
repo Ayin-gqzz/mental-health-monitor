@@ -7,7 +7,7 @@ class BehaviorLog(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     student_id = Column(String(20), ForeignKey("student_info.student_id", ondelete="CASCADE"), nullable=False)
-    record_date = Column(Date, nullable=False, server_default=text("(CURDATE())"))
+    record_date = Column(Date, nullable=False, server_default=text("(date('now'))"))
     sleep_duration = Column(Float, nullable=False)
     study_hours = Column(Float, nullable=False)
     social_media_hours = Column(Float, nullable=False)
