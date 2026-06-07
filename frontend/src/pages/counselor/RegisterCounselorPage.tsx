@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { registerCounselor } from "../../api/counselor";
-import { useAuthStore } from "../../stores/authStore";
+import { User, Lock, AlertCircle, CheckCircle } from "lucide-react";
 
 export default function RegisterCounselorPage() {
   const [username, setUsername] = useState("");
@@ -9,7 +9,7 @@ export default function RegisterCounselorPage() {
   const [displayName, setDisplayName] = useState("");
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
-  const { setAuth } = useAuthStore();
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,8 +29,9 @@ export default function RegisterCounselorPage() {
       return;
     }
 
+    setLoading(true);
     try {
-      const data = await registerCounselor(username, password, displayName);
+      await registerCounselor(username, password, displayName);
       setSuccess(`辅导员 "${displayName}" 注册成功`);
       setUsername("");
       setPassword("");
@@ -38,67 +39,119 @@ export default function RegisterCounselorPage() {
       setDisplayName("");
     } catch (err: any) {
       setError(err.response?.data?.detail || "注册失败，用户名可能已被占用");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <div style={{ maxWidth: 480 }}>
-      <h1 style={{ marginBottom: 24 }}>注册新辅导员</h1>
+      <div className="page-header">
+        <h1>➕ 注册新辅导员</h1>
+        <p className="subtitle">创建新的辅导员账号</p>
+      </div>
 
-      <form onSubmit={handleSubmit} style={{ background: "#fff", borderRadius: 12, padding: 24, boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}>
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ display: "block", marginBottom: 6, fontSize: 14, color: "#555" }}>用户名</label>
-          <input
-            type="text"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            placeholder="用于登录"
-            style={inputStyle}
-          />
+      <form onSubmit={handleSubmit} className="card" style={{ padding: 28 }}>
+        <div className="form-group">
+          <label className="form-label">用户名</label>
+          <div style={{ position: "relative" }}>
+            <User size={16} style={{
+              position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)",
+              color: "var(--text-muted)",
+            }} />
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="用于登录"
+              className="input"
+              style={{ paddingLeft: 40 }}
+            />
+          </div>
         </div>
 
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ display: "block", marginBottom: 6, fontSize: 14, color: "#555" }}>显示名称</label>
-          <input
-            type="text"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="如：张老师"
-            style={inputStyle}
-          />
+        <div className="form-group">
+          <label className="form-label">显示名称</label>
+          <div style={{ position: "relative" }}>
+            <User size={16} style={{
+              position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)",
+              color: "var(--text-muted)",
+            }} />
+            <input
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder="如：张老师"
+              className="input"
+              style={{ paddingLeft: 40 }}
+            />
+          </div>
         </div>
 
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ display: "block", marginBottom: 6, fontSize: 14, color: "#555" }}>密码</label>
-          <input
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={inputStyle}
-          />
+        <div className="form-group">
+          <label className="form-label">密码</label>
+          <div style={{ position: "relative" }}>
+            <Lock size={16} style={{
+              position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)",
+              color: "var(--text-muted)",
+            }} />
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="请设置密码（至少6位）"
+              className="input"
+              style={{ paddingLeft: 40 }}
+            />
+          </div>
         </div>
 
-        <div style={{ marginBottom: 16 }}>
-          <label style={{ display: "block", marginBottom: 6, fontSize: 14, color: "#555" }}>确认密码</label>
-          <input
-            type="password"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            style={inputStyle}
-          />
+        <div className="form-group">
+          <label className="form-label">确认密码</label>
+          <div style={{ position: "relative" }}>
+            <Lock size={16} style={{
+              position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)",
+              color: "var(--text-muted)",
+            }} />
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="请再次输入密码"
+              className="input"
+              style={{ paddingLeft: 40 }}
+            />
+          </div>
         </div>
 
-        {error && <p style={{ color: "#e94560", fontSize: 13, marginBottom: 12 }}>{error}</p>}
-        {success && <p style={{ color: "#22c55e", fontSize: 13, marginBottom: 12 }}>{success}</p>}
+        {error && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8,
+            padding: "10px 14px", borderRadius: "var(--radius-md)",
+            background: "var(--danger-light)", color: "var(--danger)",
+            fontSize: 13, marginBottom: 16,
+          }}>
+            <AlertCircle size={16} />
+            {error}
+          </div>
+        )}
 
-        <button type="submit" style={{ width: "100%", padding: 10, background: "#1a1a2e", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>
-          注册
+        {success && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8,
+            padding: "10px 14px", borderRadius: "var(--radius-md)",
+            background: "var(--success-light)", color: "var(--success)",
+            fontSize: 13, marginBottom: 16,
+          }}>
+            <CheckCircle size={16} />
+            {success}
+          </div>
+        )}
+
+        <button type="submit" disabled={loading} className="btn btn-primary" style={{ width: "100%", padding: "12px 0", fontSize: 14 }}>
+          {loading ? "注册中..." : "注册"}
         </button>
       </form>
     </div>
   );
 }
-
-const inputStyle: React.CSSProperties = {
-  width: "100%", padding: "10px 14px", border: "1px solid #ddd", borderRadius: 8, fontSize: 14, boxSizing: "border-box",
-};

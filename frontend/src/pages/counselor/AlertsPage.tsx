@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getAlerts, markAsRead, markAllAsRead, type NotificationItem } from "../../api/counselor";
+import { ChevronLeft, ChevronRight, CheckCheck } from "lucide-react";
 
 const DEPARTMENTS = ["", "理学", "工学", "医学", "商学", "艺术"];
 
@@ -35,29 +36,34 @@ export default function AlertsPage() {
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-        <h1 style={{ margin: 0 }}>高风险预警</h1>
-        <button onClick={handleMarkAllRead} style={{ padding: "8px 16px", background: "#1a1a2e", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>
-          全部标为已读
+        <div className="page-header" style={{ margin: 0 }}>
+          <h1>🚨 高风险预警</h1>
+          <p className="subtitle">需要关注的高风险学生预警信息</p>
+        </div>
+        <button className="btn btn-primary" onClick={handleMarkAllRead}>
+          <CheckCheck size={16} /> 全部标为已读
         </button>
       </div>
 
+      {/* Filters */}
       <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
-        <select value={department} onChange={(e) => { setDepartment(e.target.value); setPage(1); }} style={selectStyle}>
+        <select value={department} onChange={(e) => { setDepartment(e.target.value); setPage(1); }} className="select" style={{ width: 140 }}>
           {DEPARTMENTS.map((d) => <option key={d} value={d}>{d || "全部院系"}</option>)}
         </select>
-        <select value={readFilter} onChange={(e) => { setReadFilter(e.target.value); setPage(1); }} style={selectStyle}>
+        <select value={readFilter} onChange={(e) => { setReadFilter(e.target.value); setPage(1); }} className="select" style={{ width: 140 }}>
           <option value="">全部状态</option>
           <option value="false">未读</option>
           <option value="true">已读</option>
         </select>
       </div>
 
-      <div style={{ background: "#fff", borderRadius: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.08)", overflow: "hidden" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      {/* Table */}
+      <div className="card" style={{ overflow: "hidden" }}>
+        <table className="data-table">
           <thead>
-            <tr style={{ background: "#fef2f2", textAlign: "left" }}>
+            <tr>
               {["状态", "学号", "姓名", "院系", "性别", "概率", "风险", "日期", "操作"].map((h) => (
-                <th key={h} style={{ padding: "12px 16px", fontSize: 13, color: "#666" }}>{h}</th>
+                <th key={h}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -66,38 +72,36 @@ export default function AlertsPage() {
               <tr
                 key={a.id}
                 style={{
-                  borderTop: "1px solid #eee",
                   cursor: "pointer",
-                  background: a.is_read ? "#fff" : "#fef2f2",
+                  background: a.is_read ? "transparent" : "rgba(239,68,68,0.02)",
                 }}
                 onClick={() => navigate(`/counselor/students/${a.student_id}`)}
               >
-                <td style={{ padding: "12px 16px" }}>
+                <td>
                   <span style={{
                     display: "inline-block", width: 8, height: 8, borderRadius: "50%",
-                    background: a.is_read ? "#ccc" : "#e94560",
+                    background: a.is_read ? "var(--border)" : "var(--danger)",
+                    boxShadow: a.is_read ? "none" : "0 0 6px rgba(239,68,68,0.4)",
                   }} />
                 </td>
-                <td style={{ padding: "12px 16px", fontWeight: 500 }}>{a.student_id}</td>
-                <td style={{ padding: "12px 16px" }}>{a.name}</td>
-                <td style={{ padding: "12px 16px" }}>{a.department}</td>
-                <td style={{ padding: "12px 16px" }}>{a.gender}</td>
-                <td style={{ padding: "12px 16px", color: "#e94560", fontWeight: 600 }}>
+                <td style={{ fontWeight: 500 }}>{a.student_id}</td>
+                <td>{a.name}</td>
+                <td>{a.department}</td>
+                <td>{a.gender}</td>
+                <td style={{ color: "var(--danger)", fontWeight: 600 }}>
                   {a.depression_probability ? (a.depression_probability * 100).toFixed(1) + "%" : "—"}
                 </td>
-                <td style={{ padding: "12px 16px" }}>
-                  <span style={{ background: "#e9456020", color: "#e94560", padding: "2px 10px", borderRadius: 12, fontSize: 12, fontWeight: 600 }}>
-                    高
-                  </span>
+                <td>
+                  <span className="badge badge-danger">高</span>
                 </td>
-                <td style={{ padding: "12px 16px", color: "#888", fontSize: 13 }}>
+                <td style={{ color: "var(--text-muted)", fontSize: 12 }}>
                   {a.created_at ? new Date(a.created_at).toLocaleDateString("zh-CN") : "—"}
                 </td>
-                <td style={{ padding: "12px 16px" }}>
+                <td>
                   {!a.is_read && (
                     <button
+                      className="btn btn-primary btn-sm"
                       onClick={(e) => handleMarkRead(a.id, e)}
-                      style={{ padding: "4px 10px", background: "#22c55e", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer", fontSize: 12 }}
                     >
                       标为已读
                     </button>
@@ -107,8 +111,9 @@ export default function AlertsPage() {
             ))}
             {alerts.length === 0 && (
               <tr>
-                <td colSpan={9} style={{ padding: 40, textAlign: "center", color: "#999" }}>
-                  暂无高风险预警。请从学生详情页触发评估以生成风险数据。
+                <td colSpan={9} className="empty-state" style={{ padding: 50 }}>
+                  <div className="icon">✅</div>
+                  <p>暂无高风险预警</p>
                 </td>
               </tr>
             )}
@@ -116,14 +121,15 @@ export default function AlertsPage() {
         </table>
       </div>
 
-      <div style={{ display: "flex", justifyContent: "center", gap: 16, marginTop: 16 }}>
-        <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1} style={btnStyle}>上一页</button>
-        <span style={{ lineHeight: "36px" }}>第 {page} / {totalPages} 页</span>
-        <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page === totalPages} style={btnStyle}>下一页</button>
+      <div className="pagination">
+        <button className="btn btn-ghost btn-sm" onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1}>
+          <ChevronLeft size={14} /> 上一页
+        </button>
+        <span className="page-info">第 {page} / {totalPages} 页</span>
+        <button className="btn btn-ghost btn-sm" onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page === totalPages}>
+          下一页 <ChevronRight size={14} />
+        </button>
       </div>
     </div>
   );
 }
-
-const selectStyle: React.CSSProperties = { padding: "8px 14px", border: "1px solid #ddd", borderRadius: 8, fontSize: 14 };
-const btnStyle: React.CSSProperties = { padding: "8px 16px", border: "1px solid #ddd", borderRadius: 8, background: "#fff", cursor: "pointer" };

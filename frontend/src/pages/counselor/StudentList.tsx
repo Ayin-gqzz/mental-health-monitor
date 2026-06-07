@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getStudents, type StudentListItem } from "../../api/counselor";
+import { Search, ChevronLeft, ChevronRight } from "lucide-react";
 
 const DEPARTMENTS = ["", "理学", "工学", "医学", "商学", "艺术"];
 const RISK_LEVELS = ["", "high", "medium", "low"];
 const RISK_LABELS: Record<string, string> = { high: "高", medium: "中", low: "低" };
+const RISK_BADGE: Record<string, string> = { high: "danger", medium: "warning", low: "success" };
 
 export default function StudentList() {
   const [students, setStudents] = useState<StudentListItem[]>([]);
@@ -26,68 +28,84 @@ export default function StudentList() {
     });
   }, [page, search, department, riskLevel]);
 
-  const riskBadge = (level: string | null) => {
-    if (!level) return <span style={{ color: "#999" }}>—</span>;
-    const colors: Record<string, string> = { high: "#e94560", medium: "#f0ad4e", low: "#22c55e" };
-    return (
-      <span style={{ background: colors[level] + "20", color: colors[level], padding: "2px 10px", borderRadius: 12, fontSize: 12, fontWeight: 600 }}>
-        {RISK_LABELS[level] || level}
-      </span>
-    );
-  };
-
   return (
     <div>
-      <h1 style={{ marginBottom: 24 }}>学生列表</h1>
+      <div className="page-header">
+        <h1>👥 学生管理</h1>
+        <p className="subtitle">查看和管理所有学生信息</p>
+      </div>
 
+      {/* Filters */}
       <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
-        <input
-          placeholder="搜索学号或姓名..."
-          value={search}
-          onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-          style={{ padding: "8px 14px", border: "1px solid #ddd", borderRadius: 8, fontSize: 14, width: 220 }}
-        />
-        <select value={department} onChange={(e) => { setDepartment(e.target.value); setPage(1); }} style={selectStyle}>
+        <div style={{ position: "relative", width: 240 }}>
+          <Search size={16} style={{
+            position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)",
+            color: "var(--text-muted)",
+          }} />
+          <input
+            placeholder="搜索学号或姓名..."
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            className="input"
+            style={{ paddingLeft: 40 }}
+          />
+        </div>
+        <select value={department} onChange={(e) => { setDepartment(e.target.value); setPage(1); }} className="select" style={{ width: 140 }}>
           {DEPARTMENTS.map((d) => <option key={d} value={d}>{d || "全部院系"}</option>)}
         </select>
-        <select value={riskLevel} onChange={(e) => { setRiskLevel(e.target.value); setPage(1); }} style={selectStyle}>
-          {RISK_LEVELS.map((r) => <option key={r} value={r}>{r ? (RISK_LABELS[r] || r) : "全部风险等级"}</option>)}
+        <select value={riskLevel} onChange={(e) => { setRiskLevel(e.target.value); setPage(1); }} className="select" style={{ width: 140 }}>
+          {RISK_LEVELS.map((r) => <option key={r} value={r}>{r ? (RISK_LABELS[r] || r) : "全部风险"}</option>)}
         </select>
       </div>
 
-      <div style={{ background: "#fff", borderRadius: 12, boxShadow: "0 2px 8px rgba(0,0,0,0.08)", overflow: "hidden" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      {/* Table */}
+      <div className="card" style={{ overflow: "hidden" }}>
+        <table className="data-table">
           <thead>
-            <tr style={{ background: "#f8f9fa", textAlign: "left" }}>
+            <tr>
               {["学号", "姓名", "年龄", "性别", "院系", "学分绩点", "风险等级"].map((h) => (
-                <th key={h} style={{ padding: "12px 16px", fontSize: 13, color: "#666" }}>{h}</th>
+                <th key={h}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {students.map((s) => (
-              <tr key={s.student_id} style={{ borderTop: "1px solid #eee", cursor: "pointer" }} onClick={() => navigate(`/counselor/students/${s.student_id}`)}>
-                <td style={{ padding: "12px 16px", fontWeight: 500 }}>{s.student_id}</td>
-                <td style={{ padding: "12px 16px" }}>{s.name}</td>
-                <td style={{ padding: "12px 16px" }}>{s.age}</td>
-                <td style={{ padding: "12px 16px" }}>{s.gender}</td>
-                <td style={{ padding: "12px 16px" }}>{s.department}</td>
-                <td style={{ padding: "12px 16px" }}>{s.cgpa.toFixed(2)}</td>
-                <td style={{ padding: "12px 16px" }}>{riskBadge(s.risk_level)}</td>
+              <tr key={s.student_id} style={{ cursor: "pointer" }} onClick={() => navigate(`/counselor/students/${s.student_id}`)}>
+                <td style={{ fontWeight: 500 }}>{s.student_id}</td>
+                <td>{s.name}</td>
+                <td>{s.age}</td>
+                <td>{s.gender}</td>
+                <td>{s.department}</td>
+                <td>{s.cgpa.toFixed(2)}</td>
+                <td>
+                  {s.risk_level ? (
+                    <span className={`badge badge-${RISK_BADGE[s.risk_level] || "primary"}`}>
+                      {RISK_LABELS[s.risk_level] || s.risk_level}
+                    </span>
+                  ) : (
+                    <span style={{ color: "var(--text-muted)" }}>—</span>
+                  )}
+                </td>
               </tr>
             ))}
+            {students.length === 0 && (
+              <tr>
+                <td colSpan={7} className="empty-state" style={{ padding: 40 }}>暂无学生数据</td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
 
-      <div style={{ display: "flex", justifyContent: "center", gap: 16, marginTop: 16 }}>
-        <button onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1} style={btnStyle}>上一页</button>
-        <span style={{ lineHeight: "36px" }}>第 {page} / {totalPages} 页</span>
-        <button onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page === totalPages} style={btnStyle}>下一页</button>
+      <div className="pagination">
+        <button className="btn btn-ghost btn-sm" onClick={() => setPage(Math.max(1, page - 1))} disabled={page === 1}>
+          <ChevronLeft size={14} /> 上一页
+        </button>
+        <span className="page-info">第 {page} / {totalPages} 页</span>
+        <button className="btn btn-ghost btn-sm" onClick={() => setPage(Math.min(totalPages, page + 1))} disabled={page === totalPages}>
+          下一页 <ChevronRight size={14} />
+        </button>
       </div>
     </div>
   );
 }
-
-const selectStyle: React.CSSProperties = { padding: "8px 14px", border: "1px solid #ddd", borderRadius: 8, fontSize: 14 };
-const btnStyle: React.CSSProperties = { padding: "8px 16px", border: "1px solid #ddd", borderRadius: 8, background: "#fff", cursor: "pointer" };
