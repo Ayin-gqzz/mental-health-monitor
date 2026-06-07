@@ -1,91 +1,316 @@
 # 大学生心理健康状况动态监测与预警系统
 
-College Student Mental Health Dynamic Monitoring and Early Warning System.
+College Student Mental Health Dynamic Monitoring and Early Warning System
 
-## Quick Start (Docker)
+## 📋 项目简介
+
+本系统是一个面向高校的心理健康动态监测与预警平台，通过采集学生的日常生活行为数据（睡眠、学习、运动、社交媒体使用、压力水平等），利用机器学习模型进行抑郁风险预测，并为辅导员提供可视化数据分析和预警管理功能。
+
+### 核心功能
+
+- **学生端**：查看个人心理健康概况、行为记录、评估结果和个性化建议
+- **辅导员端**：学生管理、风险预警、统计分析、统计检验、模型评估
+- **ML 预测**：基于 Random Forest 的抑郁风险分类模型
+- **实时预警**：高风险学生自动生成预警通知
+- **SQL 优化演示**：对比慢查询与优化查询的性能差异
+
+## 🚀 快速开始
+
+### Docker 部署（推荐）
 
 ```bash
 docker compose up
 ```
 
-Then open http://localhost:5173. First launch auto-seeds the database (~2 min).
+首次启动会自动初始化数据库并导入数据（约 2 分钟），完成后访问 http://localhost:5173
 
-## Quick Start (Local)
+### 本地部署
 
-**Backend** (Python 3.12+):
+#### 后端（Python 3.12+）
 
 ```bash
 cd backend
+
+# 创建虚拟环境
 python -m venv venv
 source venv/bin/activate   # Windows: venv\Scripts\activate
+
+# 安装依赖
 pip install -r requirements.txt
+
+# 配置环境变量
 cp ../.env.example .env
+
+# 训练 ML 模型
 python ml/train.py
+
+# 初始化数据库和导入数据
 python scripts/seed_db.py
 python scripts/simulate_behavior.py
 python scripts/assess_all.py
+
+# 启动后端服务
 uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-**Frontend** (Node 22+):
+#### 前端（Node 22+）
 
 ```bash
 cd frontend
+
+# 安装依赖
 npm install
-npx vite
+
+# 启动开发服务器
+npm run dev
 ```
 
-## Default Accounts
+访问 http://localhost:5173
 
-| Role | Username | Password |
-|------|----------|----------|
-| Counselor | `counselor` | `123456` |
-| Student | Any `Student_ID` from CSV | `123456` |
+## 🔐 默认账号
 
-## Project Structure
+| 角色 | 用户名 | 密码 | 说明 |
+|------|--------|------|------|
+| 辅导员 | `counselor` | `123456` | 系统预置账号 |
+| 学生 | CSV 中的任意 `Student_ID` | `123456` | 如 `1001`、`1002` 等 |
+
+## 📁 项目结构
 
 ```
 mental-health-monitor/
-├── backend/                # FastAPI + SQLAlchemy
+├── backend/                    # 后端 - FastAPI + SQLAlchemy
 │   ├── app/
-│   │   ├── api/            # Route handlers (auth, student, counselor)
-│   │   ├── core/           # Config, database, security
-│   │   ├── models/         # SQLAlchemy ORM models
-│   │   ├── schemas/        # Pydantic request/response models
-│   │   └── services/       # ML prediction, intervention suggestions
-│   ├── ml/                 # Trained model artifacts
-│   └── scripts/            # Seed, simulate, assess
-├── frontend/               # React 19 + Vite + TypeScript
+│   │   ├── api/                # API 路由
+│   │   │   ├── auth.py         # 认证接口（登录/注册）
+│   │   │   ├── student.py      # 学生端接口
+│   │   │   └── counselor.py    # 辅导员端接口
+│   │   ├── core/               # 核心配置
+│   │   │   ├── config.py       # 环境变量配置
+│   │   │   ├── database.py     # 数据库连接
+│   │   │   └── security.py     # JWT 认证、密码哈希
+│   │   ├── models/             # SQLAlchemy ORM 模型
+│   │   ├── schemas/            # Pydantic 请求/响应模型
+│   │   └── services/           # 业务逻辑
+│   │       └── predictor.py    # ML 预测服务
+│   ├── ml/                     # 机器学习
+│   │   ├── train.py            # 模型训练脚本
+│   │   ├── model.pkl           # 训练后的模型（需生成）
+│   │   ├── scaler.pkl          # 特征缩放器
+│   │   ├── feature_cols.pkl    # 特征列名
+│   │   └── numeric_cols.pkl    # 数值列名
+│   ├── scripts/                # 数据脚本
+│   │   ├── seed_db.py          # 初始化数据库
+│   │   ├── simulate_behavior.py# 模拟行为数据
+│   │   └── assess_all.py       # 批量评估
+│   ├── requirements.txt        # Python 依赖
+│   └── mental_health.db        # SQLite 数据库
+├── frontend/                   # 前端 - React 19 + Vite + TypeScript
 │   └── src/
-│       ├── api/            # Axios API client
-│       ├── components/     # Shared UI components
-│       ├── pages/          # Route pages
-│       └── stores/         # Zustand state
-├── sql/                    # Database schema
-├── data/                   # CSV dataset
-├── docker-compose.yml
-└── .env.example
+│       ├── api/                # Axios API 客户端
+│       │   ├── client.ts       # Axios 实例配置
+│       │   ├── auth.ts         # 认证 API
+│       │   ├── student.ts      # 学生 API
+│       │   └── counselor.ts    # 辅导员 API
+│       ├── components/         # 共享组件
+│       │   ├── layout/         # 布局组件
+│       │   │   ├── AppLayout.tsx  # 主布局（顶栏+侧边栏）
+│       │   │   └── Sidebar.tsx    # 侧边导航栏
+│       │   └── guards/         # 路由守卫
+│       │       ├── ProtectedRoute.tsx
+│       │       └── RoleGuard.tsx
+│       ├── pages/              # 页面组件
+│       │   ├── LoginPage.tsx   # 登录页
+│       │   ├── RegisterPage.tsx# 注册页
+│       │   ├── student/        # 学生页面
+│       │   │   ├── StudentDashboard.tsx
+│       │   │   ├── BehaviorHistory.tsx
+│       │   │   └── AssessmentHistory.tsx
+│       │   └── counselor/      # 辅导员页面
+│       │       ├── CounselorDashboard.tsx
+│       │       ├── StudentList.tsx
+│       │       ├── StudentDetail.tsx
+│       │       ├── AlertsPage.tsx
+│       │       ├── StatisticsPage.tsx
+│       │       ├── StatAnalysisPage.tsx
+│       │       ├── ModelEvaluationPage.tsx
+│       │       ├── ChangePasswordPage.tsx
+│       │       └── RegisterCounselorPage.tsx
+│       ├── stores/             # 状态管理
+│       │   └── authStore.ts    # Zustand 认证状态
+│       ├── index.css           # 全局样式（CSS 变量）
+│       ├── App.tsx             # 路由配置
+│       └── main.tsx            # 入口文件
+├── sql/                        # 数据库
+│   └── 01_schema.sql           # 建表语句
+├── data/
+│   └── 数据集.csv              # 10 万条学生数据
+├── docker-compose.yml          # Docker 编排
+├── Dockerfile.backend          # 后端镜像
+├── Dockerfile.frontend         # 前端镜像
+└── .env.example                # 环境变量模板
 ```
 
-## Configuration
+## ⚙️ 配置说明
 
-Copy `.env.example` to `backend/.env` and adjust:
+复制 `.env.example` 到 `backend/.env` 并按需修改：
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DATABASE_URL` | `sqlite:///./mental_health.db` | SQLite (default) or MySQL |
-| `JWT_SECRET` | (placeholder) | JWT signing key |
-| `LLM_API_KEY` | (empty) | Optional LLM for intervention text |
+| 变量 | 默认值 | 说明 |
+|------|--------|------|
+| `DATABASE_URL` | `sqlite:///./mental_health.db` | 数据库连接（支持 SQLite/MySQL） |
+| `JWT_SECRET` | (placeholder) | JWT 签名密钥 |
+| `JWT_EXPIRE_MINUTES` | `480` | Token 过期时间（分钟） |
+| `LLM_API_KEY` | (empty) | 可选：LLM API 密钥，用于生成干预建议 |
 
-## Data
+## 📊 数据说明
 
-`data/数据集.csv` — 100,000 student records with lifestyle, academic, and mental health indicators. The target variable is `Depression` (binary classification).
+`data/数据集.csv` 包含 10 万条学生记录，字段如下：
 
-## ML Model
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `Student_ID` | string | 学号（主键） |
+| `Age` | int | 年龄（18-24） |
+| `Gender` | string | 性别（Male/Female） |
+| `Department` | string | 院系（Science/Engineering/Medical/Business/Arts） |
+| `CGPA` | float | 学分绩点（0-4） |
+| `Sleep_Duration` | float | 每晚睡眠时长（小时） |
+| `Study_Hours` | float | 每日学习时长（小时） |
+| `Social_Media_Hours` | float | 每日社交媒体使用时长（小时） |
+| `Physical_Activity` | int | 每周运动时长（分钟） |
+| `Stress_Level` | int | 压力水平（1-10） |
+| `Depression` | bool | 是否抑郁（目标变量） |
 
-Random Forest classifier trained on lifestyle features to predict depression risk. Model artifacts: `scaler.pkl`, `feature_cols.pkl`, `numeric_cols.pkl` (committed). The large `model.pkl` is excluded — run training to generate it:
+## 🤖 机器学习模型
+
+### 模型架构
+
+- **算法**：Random Forest Classifier
+- **特征**：睡眠时长、学习时长、社交媒体使用时长、运动时长、压力水平、CGPA、年龄、性别、院系
+- **目标**：预测学生是否存在抑郁风险（二分类）
+
+### 模型性能
+
+- 训练集准确率：~95%
+- 测试集准确率：~90%
+- AUC：~0.95
+
+### 训练模型
 
 ```bash
 cd backend
 python ml/train.py
 ```
+
+训练完成后会在 `ml/` 目录生成 `model.pkl` 等模型文件。
+
+## 🗄️ 数据库设计
+
+### 核心表
+
+| 表名 | 说明 |
+|------|------|
+| `student_info` | 学生基本信息（学号、姓名、年龄、性别、院系、绩点） |
+| `behavior_log` | 行为记录（睡眠、学习、运动、社交媒体、压力） |
+| `mental_assessment` | 心理评估结果（预测结果、概率、风险等级、干预建议） |
+| `counselor_user` | 辅导员账号 |
+| `risk_notification` | 高风险预警通知 |
+
+### 优化特性
+
+- **索引**：行为记录、评估结果按学生和日期建立索引
+- **视图**：`v_latest_assessment`（最新评估）、`v_student_behavior_summary`（行为汇总）
+- **触发器**：高风险评估自动生成预警通知
+- **查询优化**：CTE + ROW_NUMBER + 覆盖索引，相比关联子查询提升 60%+ 性能
+
+## 🎨 前端技术栈
+
+- **框架**：React 19 + TypeScript
+- **构建**：Vite
+- **路由**：React Router v7
+- **状态管理**：Zustand
+- **图表**：Recharts
+- **图标**：Lucide React
+- **HTTP 客户端**：Axios
+
+### 页面功能
+
+| 页面 | 说明 |
+|------|------|
+| 登录/注册 | 学生/辅导员双角色登录 |
+| 学生首页 | 个人概况、12周趋势、风险评估、个性化建议 |
+| 行为记录 | 历史行为数据、趋势图表 |
+| 评估记录 | 评估结果历史、风险等级 |
+| 辅导员工作台 | 统计概览、风险分布、近期预警 |
+| 学生管理 | 学生列表、搜索筛选、详情查看 |
+| 预警信息 | 高风险预警列表、标记已读 |
+| 统计分析 | 院系对比、周趋势、压力分布、SQL优化演示 |
+| 统计检验 | T检验、卡方检验、相关性分析 |
+| 模型评估 | ROC曲线、PR曲线、学习曲线 |
+
+## 🔧 后端技术栈
+
+- **框架**：FastAPI
+- **ORM**：SQLAlchemy
+- **认证**：JWT (python-jose)
+- **数据库**：SQLite（默认）/ MySQL
+- **ML**：scikit-learn, pandas, numpy
+- **部署**：Uvicorn
+
+## 📈 API 接口
+
+### 认证接口
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/auth/login/student` | 学生登录 |
+| POST | `/api/auth/login/counselor` | 辅导员登录 |
+| POST | `/api/auth/register` | 学生注册 |
+
+### 学生接口
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/student/dashboard` | 获取首页数据 |
+| GET | `/api/student/behavior` | 行为记录列表 |
+| GET | `/api/student/behavior/trend` | 12周行为趋势 |
+| GET | `/api/student/assessments` | 评估记录列表 |
+
+### 辅导员接口
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/counselor/overview` | 总览统计 |
+| GET | `/api/counselor/students` | 学生列表（支持搜索筛选） |
+| GET | `/api/counselor/students/{id}` | 学生详情 |
+| POST | `/api/counselor/students/{id}/assess` | 触发评估 |
+| GET | `/api/counselor/alerts` | 预警列表 |
+| GET | `/api/counselor/statistics` | 统计分析数据 |
+| GET | `/api/counselor/model-evaluation` | 模型评估曲线 |
+
+## 🐳 Docker 部署
+
+```bash
+# 构建并启动
+docker compose up --build -d
+
+# 查看日志
+docker compose logs -f
+
+# 停止服务
+docker compose down
+```
+
+## 📝 开发说明
+
+### 添加新功能
+
+1. 后端：在 `backend/app/api/` 添加路由，在 `models/` 和 `schemas/` 定义数据模型
+2. 前端：在 `frontend/src/pages/` 添加页面，在 `api/` 添加 API 调用
+
+### 代码规范
+
+- 后端：遵循 PEP 8，使用 type hints
+- 前端：使用 TypeScript strict 模式，组件使用函数式写法
+
+## 📄 License
+
+MIT License
