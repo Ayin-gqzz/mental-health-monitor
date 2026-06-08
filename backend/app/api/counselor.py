@@ -720,9 +720,16 @@ def get_stress_distribution(user: dict = Depends(require_role("counselor"))):
     return [{"stress_level": r.stress_level, "count": r.count} for r in rows]
 
 
+_cluster_cache = {"data": None, "timestamp": 0}
+
 @router.get("/cluster-analysis")
 def get_cluster_analysis(user: dict = Depends(require_role("counselor"))):
-    """学生群体聚类画像 — K-Means + PCA 降维"""
+    """学生群体聚类画像 — K-Means + PCA 降维（带缓存）"""
+    import time as _time
+    # 缓存 5 分钟
+    if _cluster_cache["data"] and _time.time() - _cluster_cache["timestamp"] < 300:
+        return _cluster_cache["data"]
+
     import numpy as np
     from sklearn.cluster import KMeans
     from sklearn.preprocessing import StandardScaler
@@ -864,13 +871,16 @@ def get_cluster_analysis(user: dict = Depends(require_role("counselor"))):
         "physical_activity": round(float(np.mean(X[:, 4])), 2),
     }
 
-    return {
+    result = {
         "clusters": clusters,
         "scatter": scatter,
         "global_means": global_means,
         "feature_names": feature_names,
         "total_students": len(rows),
     }
+    _cluster_cache["data"] = result
+    _cluster_cache["timestamp"] = _time.time()
+    return result
 
 
 # ── SQL optimization demo ────────────────────────────────────

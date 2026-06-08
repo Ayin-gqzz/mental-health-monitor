@@ -211,7 +211,7 @@ export interface ClusterData {
 }
 
 export async function getClusterAnalysis() {
-  const res = await client.get("/counselor/cluster-analysis");
+  const res = await client.get("/counselor/cluster-analysis", { timeout: 60000 });
   return res.data as ClusterData;
 }
 
