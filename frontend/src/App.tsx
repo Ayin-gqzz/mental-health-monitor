@@ -7,6 +7,8 @@ import RegisterPage from "./pages/RegisterPage";
 import StudentDashboard from "./pages/student/StudentDashboard";
 import BehaviorHistory from "./pages/student/BehaviorHistory";
 import AssessmentHistory from "./pages/student/AssessmentHistory";
+import WeeklyAssessmentPage from "./pages/student/WeeklyAssessmentPage";
+import WeeklyAssessmentHistory from "./pages/student/WeeklyAssessmentHistory";
 import CounselorDashboard from "./pages/counselor/CounselorDashboard";
 import StudentList from "./pages/counselor/StudentList";
 import StudentDetail from "./pages/counselor/StudentDetail";
@@ -33,6 +35,8 @@ export default function App() {
           <Route path="/student" element={<RoleGuard role="student"><StudentDashboard /></RoleGuard>} />
           <Route path="/student/behavior" element={<RoleGuard role="student"><BehaviorHistory /></RoleGuard>} />
           <Route path="/student/assessments" element={<RoleGuard role="student"><AssessmentHistory /></RoleGuard>} />
+          <Route path="/student/weekly-assessment" element={<RoleGuard role="student"><WeeklyAssessmentPage /></RoleGuard>} />
+          <Route path="/student/weekly-history" element={<RoleGuard role="student"><WeeklyAssessmentHistory /></RoleGuard>} />
           <Route path="/counselor" element={<RoleGuard role="counselor"><CounselorDashboard /></RoleGuard>} />
           <Route path="/counselor/students" element={<RoleGuard role="counselor"><StudentList /></RoleGuard>} />
           <Route path="/counselor/students/:id" element={<RoleGuard role="counselor"><StudentDetail /></RoleGuard>} />

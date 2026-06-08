@@ -27,10 +27,38 @@ export interface AssessmentLatest {
   counselor_notes: string | null;
 }
 
+export interface WeeklyAssessment {
+  id: number;
+  student_id: string;
+  submit_date: string;
+  mood_score: number;
+  sleep_quality: number;
+  study_state: number;
+  social_state: number;
+  life_satisfaction: number;
+  overall_score: number;
+  message: string | null;
+  counselor_reply: string | null;
+  created_at: string;
+}
+
+export interface WeeklyAssessmentLatest {
+  submit_date: string;
+  mood_score: number;
+  sleep_quality: number;
+  study_state: number;
+  social_state: number;
+  life_satisfaction: number;
+  overall_score: number;
+  message: string | null;
+  counselor_reply: string | null;
+}
+
 export interface DashboardData {
   profile: StudentProfile;
   latest_behavior: BehaviorLatest | null;
   latest_assessment: AssessmentLatest | null;
+  latest_weekly_assessment: WeeklyAssessmentLatest | null;
   trend: { week: string; avg_stress: number; avg_sleep: number }[];
 }
 
@@ -70,4 +98,32 @@ export async function getAssessments(page = 1, pageSize = 10) {
 export async function getAssessmentLatest() {
   const res = await client.get("/student/assessments/latest");
   return res.data as AssessmentLatest | null;
+}
+
+// 每周心理测评 API
+export async function getWeeklyAssessments(page = 1, pageSize = 10) {
+  const res = await client.get("/student/weekly-assessments", { params: { page, page_size: pageSize } });
+  return res.data as PaginatedResponse<WeeklyAssessment>;
+}
+
+export async function getWeeklyAssessmentLatest() {
+  const res = await client.get("/student/weekly-assessments/latest");
+  return res.data as WeeklyAssessmentLatest | null;
+}
+
+export async function canSubmitWeekly() {
+  const res = await client.get("/student/weekly-assessments/can-submit");
+  return res.data as { can_submit: boolean; submitted: boolean };
+}
+
+export async function createWeeklyAssessment(data: {
+  mood_score: number;
+  sleep_quality: number;
+  study_state: number;
+  social_state: number;
+  life_satisfaction: number;
+  message?: string;
+}) {
+  const res = await client.post("/student/weekly-assessments", data);
+  return res.data as WeeklyAssessment;
 }

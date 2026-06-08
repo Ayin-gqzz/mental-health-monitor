@@ -118,3 +118,23 @@ BEGIN
     VALUES (NEW.student_id, NEW.risk_level,
             'Student ' || NEW.student_id || ' assessed as HIGH risk on ' || NEW.assessment_date);
 END;
+
+-- ============================================================
+-- Table 6: weekly_assessment — 学生每周心理测评
+-- ============================================================
+CREATE TABLE IF NOT EXISTS weekly_assessment (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id          VARCHAR(20) NOT NULL,
+    submit_date         DATE NOT NULL DEFAULT (date('now')),
+    mood_score          INTEGER NOT NULL CHECK(mood_score BETWEEN 1 AND 5),
+    sleep_quality       INTEGER NOT NULL CHECK(sleep_quality BETWEEN 1 AND 5),
+    study_state         INTEGER NOT NULL CHECK(study_state BETWEEN 1 AND 5),
+    social_state        INTEGER NOT NULL CHECK(social_state BETWEEN 1 AND 5),
+    life_satisfaction   INTEGER NOT NULL CHECK(life_satisfaction BETWEEN 1 AND 5),
+    overall_score       REAL NOT NULL,
+    message             TEXT,
+    counselor_reply     TEXT,
+    created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (student_id) REFERENCES student_info(student_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_weekly_assessment_student_date ON weekly_assessment(student_id, submit_date DESC);

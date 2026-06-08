@@ -5,12 +5,15 @@ import { getUnreadCount } from "../../api/counselor";
 import {
   LayoutDashboard, Activity, ClipboardList, Users, BarChart3, AlertTriangle, LogOut,
   FlaskConical, LineChart, KeyRound, UserPlus, Brain, ChevronLeft, ChevronRight,
+  ClipboardCheck, History,
 } from "lucide-react";
 
 const studentLinks = [
   { path: "/student", label: "首页", icon: LayoutDashboard },
   { path: "/student/behavior", label: "行为记录", icon: Activity },
   { path: "/student/assessments", label: "评估记录", icon: ClipboardList },
+  { path: "/student/weekly-assessment", label: "心理测评", icon: ClipboardCheck },
+  { path: "/student/weekly-history", label: "测评记录", icon: History },
 ];
 
 const counselorLinks = [
