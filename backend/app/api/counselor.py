@@ -304,8 +304,15 @@ def trigger_assess_all(user: dict = Depends(require_role("counselor"))):
 
 # ── Statistics ───────────────────────────────────────────────
 
+# 缓存 overview 数据 60 秒，避免重复查询
+_overview_cache = {"data": None, "timestamp": 0}
+
 @router.get("/statistics/overview", response_model=OverviewStats)
 def get_overview(user: dict = Depends(require_role("counselor"))):
+    import time as _time
+    if _overview_cache["data"] and _time.time() - _overview_cache["timestamp"] < 60:
+        return _overview_cache["data"]
+
     db = user["db"]
 
     total = db.query(StudentInfo).count()
@@ -316,16 +323,16 @@ def get_overview(user: dict = Depends(require_role("counselor"))):
     risk_map = {r[0]: r[1] for r in risk_counts}
 
     avg_stress = db.execute(text(
-        "SELECT ROUND(AVG(stress_level), 2) FROM "
-        "(SELECT stress_level FROM behavior_log WHERE id IN "
-        "(SELECT MAX(id) FROM behavior_log GROUP BY student_id)) AS latest_beh"
+        "SELECT ROUND(AVG(bl.stress_level), 2) FROM behavior_log bl "
+        "INNER JOIN (SELECT MAX(id) AS max_id FROM behavior_log GROUP BY student_id) latest "
+        "ON bl.id = latest.max_id"
     )).scalar() or 0
 
     depressed = db.execute(text(
         "SELECT COUNT(*) FROM v_latest_assessment WHERE depression_predicted = 1"
     )).scalar() or 0
 
-    return OverviewStats(
+    result = OverviewStats(
         total_students=total,
         high_risk_count=risk_map.get("high", 0),
         medium_risk_count=risk_map.get("medium", 0),
@@ -333,6 +340,9 @@ def get_overview(user: dict = Depends(require_role("counselor"))):
         avg_stress=round(float(avg_stress), 2),
         depression_rate=round(depressed / total * 100, 1) if total > 0 else 0,
     )
+    _overview_cache["data"] = result
+    _overview_cache["timestamp"] = _time.time()
+    return result
 
 
 @router.get("/statistics/departments", response_model=list[DepartmentStats])
