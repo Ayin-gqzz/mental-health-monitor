@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 from pydantic import BaseModel, Field
 
@@ -26,7 +26,7 @@ class WeeklyAssessmentOut(BaseModel):
     overall_score: float
     message: Optional[str] = None
     counselor_reply: Optional[str] = None
-    created_at: date
+    created_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
 
