@@ -60,11 +60,11 @@ def week_label(column):
 
 
 def today_expr():
-    """跨数据库的今日日期表达式"""
+    """跨数据库的今日日期表达式（用于 server_default）"""
     if _is_sqlite:
         return text("(date('now'))")
     else:
-        return text("CURDATE()")
+        return text("(CURDATE())")
 
 
 def get_db():
