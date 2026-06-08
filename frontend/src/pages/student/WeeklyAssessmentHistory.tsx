@@ -10,10 +10,16 @@ export default function WeeklyAssessmentHistory() {
   const [totalPages, setTotalPages] = useState(1);
 
   useEffect(() => {
-    getWeeklyAssessments(page).then((res) => {
-      setItems(res.items);
-      setTotalPages(res.total_pages);
-    });
+    getWeeklyAssessments(page)
+      .then((res) => {
+        setItems(res.items);
+        setTotalPages(res.total_pages);
+      })
+      .catch(() => {
+        // 如果 API 失败，显示空列表
+        setItems([]);
+        setTotalPages(1);
+      });
   }, [page]);
 
   const getOverallColor = (score: number) => {

@@ -47,6 +47,10 @@ export default function WeeklyAssessmentPage() {
         setSubmitted(canResult.submitted);
         setLatest(latestResult);
       })
+      .catch(() => {
+        // 如果 API 失败（比如表不存在），默认显示提交表单
+        setSubmitted(false);
+      })
       .finally(() => setLoading(false));
   }, []);
 
