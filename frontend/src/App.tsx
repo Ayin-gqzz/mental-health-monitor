@@ -15,7 +15,7 @@ import StudentDetail from "./pages/counselor/StudentDetail";
 import StatisticsPage from "./pages/counselor/StatisticsPage";
 import AlertsPage from "./pages/counselor/AlertsPage";
 import StatAnalysisPage from "./pages/counselor/StatAnalysisPage";
-import ModelEvaluationPage from "./pages/counselor/ModelEvaluationPage";
+import ClusterAnalysisPage from "./pages/counselor/ClusterAnalysisPage";
 import ChangePasswordPage from "./pages/counselor/ChangePasswordPage";
 import RegisterCounselorPage from "./pages/counselor/RegisterCounselorPage";
 
@@ -43,7 +43,7 @@ export default function App() {
           <Route path="/counselor/statistics" element={<RoleGuard role="counselor"><StatisticsPage /></RoleGuard>} />
           <Route path="/counselor/alerts" element={<RoleGuard role="counselor"><AlertsPage /></RoleGuard>} />
           <Route path="/counselor/stat-analysis" element={<RoleGuard role="counselor"><StatAnalysisPage /></RoleGuard>} />
-          <Route path="/counselor/model-evaluation" element={<RoleGuard role="counselor"><ModelEvaluationPage /></RoleGuard>} />
+          <Route path="/counselor/model-evaluation" element={<RoleGuard role="counselor"><ClusterAnalysisPage /></RoleGuard>} />
           <Route path="/counselor/change-password" element={<RoleGuard role="counselor"><ChangePasswordPage /></RoleGuard>} />
           <Route path="/counselor/register" element={<RoleGuard role="counselor"><RegisterCounselorPage /></RoleGuard>} />
         </Route>

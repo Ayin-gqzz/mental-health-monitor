@@ -12,7 +12,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/counselor/students": "学生管理",
   "/counselor/statistics": "统计分析",
   "/counselor/stat-analysis": "统计检验",
-  "/counselor/model-evaluation": "模型评估",
+  "/counselor/model-evaluation": "学生群体画像",
   "/counselor/alerts": "预警信息",
   "/counselor/change-password": "修改密码",
   "/counselor/register": "注册辅导员",

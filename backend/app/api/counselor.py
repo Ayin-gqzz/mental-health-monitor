@@ -720,13 +720,159 @@ def get_stress_distribution(user: dict = Depends(require_role("counselor"))):
     return [{"stress_level": r.stress_level, "count": r.count} for r in rows]
 
 
-@router.get("/model/evaluation")
-def get_model_evaluation(user: dict = Depends(require_role("counselor"))):
-    import joblib, os
-    curves_path = os.path.join(os.path.dirname(__file__), "..", "..", "ml", "evaluation_curves.pkl")
-    if not os.path.exists(curves_path):
-        raise HTTPException(404, "Model evaluation data not found. Re-run training: python ml/train.py")
-    return joblib.load(curves_path)
+@router.get("/cluster-analysis")
+def get_cluster_analysis(user: dict = Depends(require_role("counselor"))):
+    """学生群体聚类画像 — K-Means + PCA 降维"""
+    import numpy as np
+    from sklearn.cluster import KMeans
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.decomposition import PCA
+
+    db = user["db"]
+
+    # 获取每个学生最新行为数据
+    beh_sub = db.query(
+        BehaviorLog.student_id,
+        BehaviorLog.stress_level,
+        BehaviorLog.sleep_duration,
+        BehaviorLog.study_hours,
+        BehaviorLog.social_media_hours,
+        BehaviorLog.physical_activity,
+        func.row_number().over(
+            partition_by=BehaviorLog.student_id,
+            order_by=BehaviorLog.record_date.desc(),
+        ).label("rn"),
+    ).subquery()
+
+    rows = db.query(
+        beh_sub.c.student_id, beh_sub.c.stress_level, beh_sub.c.sleep_duration,
+        beh_sub.c.study_hours, beh_sub.c.social_media_hours, beh_sub.c.physical_activity,
+    ).filter(beh_sub.c.rn == 1).all()
+
+    if len(rows) < 10:
+        raise HTTPException(400, "数据不足，至少需要10条行为记录")
+
+    student_ids = [r.student_id for r in rows]
+    X = np.array([
+        [r.stress_level, r.sleep_duration, r.study_hours, r.social_media_hours, r.physical_activity]
+        for r in rows
+    ], dtype=float)
+
+    feature_names = ["压力水平", "睡眠时长", "学习时长", "社交媒体", "运动时长"]
+
+    # 标准化
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+
+    # K-Means 聚类 (K=4)
+    kmeans = KMeans(n_clusters=4, random_state=42, n_init=10)
+    labels = kmeans.fit_predict(X_scaled)
+
+    # PCA 降维到 2D
+    pca = PCA(n_components=2, random_state=42)
+    X_2d = pca.fit_transform(X_scaled)
+
+    # 聚类中心（原始尺度）
+    centers_original = scaler.inverse_transform(kmeans.cluster_centers_)
+
+    # 每个聚类的统计
+    clusters = []
+    cluster_names = ["🟢 健康均衡型", "🔵 学业专注型", "🟡 社交活跃型", "🔴 高压风险型"]
+
+    for i in range(4):
+        mask = labels == i
+        cluster_indices = np.where(mask)[0]
+        center = centers_original[i]
+        count = int(mask.sum())
+
+        # 获取该聚类学生的评估风险分布
+        cluster_student_ids = [student_ids[j] for j in cluster_indices]
+        risk_counts = {"high": 0, "medium": 0, "low": 0, "none": 0}
+        if cluster_student_ids:
+            # 查询每个学生的最新风险等级
+            assess_sub = db.query(
+                MentalAssessment.student_id, MentalAssessment.risk_level,
+                func.row_number().over(
+                    partition_by=MentalAssessment.student_id,
+                    order_by=MentalAssessment.assessment_date.desc(),
+                ).label("rn"),
+            ).filter(MentalAssessment.student_id.in_(cluster_student_ids)).subquery()
+
+            risk_rows = db.query(assess_sub.c.risk_level).filter(assess_sub.c.rn == 1).all()
+            for rr in risk_rows:
+                risk_counts[rr.risk_level or "none"] += 1
+
+        # 根据聚类中心特征自动命名
+        stress = center[0]
+        sleep = center[1]
+        study = center[2]
+        social = center[3]
+        activity = center[4]
+
+        if stress >= 6.5 and sleep <= 6:
+            auto_name = "🔴 高压风险型"
+        elif study >= 7 and social <= 4:
+            auto_name = "🔵 学业专注型"
+        elif social >= 5 and activity >= 150:
+            auto_name = "🟡 社交活跃型"
+        else:
+            auto_name = "🟢 健康均衡型"
+
+        clusters.append({
+            "cluster_id": i,
+            "name": auto_name,
+            "count": count,
+            "percentage": round(count / len(rows) * 100, 1),
+            "features": {
+                "stress_level": round(float(stress), 2),
+                "sleep_duration": round(float(sleep), 2),
+                "study_hours": round(float(study), 2),
+                "social_media_hours": round(float(social), 2),
+                "physical_activity": round(float(activity), 2),
+            },
+            "risk_distribution": risk_counts,
+        })
+
+    # PCA 散点图数据
+    scatter = []
+    for i, sid in enumerate(student_ids):
+        scatter.append({
+            "student_id": sid,
+            "x": round(float(X_2d[i, 0]), 4),
+            "y": round(float(X_2d[i, 1]), 4),
+            "cluster": int(labels[i]),
+        })
+
+    # 全局特征均值（用于雷达图对比）
+    global_means = {
+        "stress_level": round(float(np.mean(X[:, 0])), 2),
+        "sleep_duration": round(float(np.mean(X[:, 1])), 2),
+        "study_hours": round(float(np.mean(X[:, 2])), 2),
+        "social_media_hours": round(float(np.mean(X[:, 3])), 2),
+        "physical_activity": round(float(np.mean(X[:, 4])), 2),
+    }
+
+    # 性别分布
+    gender_sub = db.query(StudentInfo.student_id, StudentInfo.gender).filter(
+        StudentInfo.student_id.in_(student_ids)
+    ).all()
+    gender_map = {r.student_id: r.gender for r in gender_sub}
+
+    for i in range(4):
+        mask = labels == i
+        cluster_indices = np.where(mask)[0]
+        cluster_sids = [student_ids[j] for j in cluster_indices]
+        males = sum(1 for s in cluster_sids if gender_map.get(s) == "Male")
+        females = sum(1 for s in cluster_sids if gender_map.get(s) == "Female")
+        clusters[i]["gender_ratio"] = {"male": males, "female": females}
+
+    return {
+        "clusters": clusters,
+        "scatter": scatter,
+        "global_means": global_means,
+        "feature_names": feature_names,
+        "total_students": len(rows),
+    }
 
 
 # ── SQL optimization demo ────────────────────────────────────

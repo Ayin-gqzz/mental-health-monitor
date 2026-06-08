@@ -4,8 +4,8 @@ import { useAuthStore } from "../../stores/authStore";
 import { getUnreadCount } from "../../api/counselor";
 import {
   LayoutDashboard, Activity, ClipboardList, Users, BarChart3, AlertTriangle, LogOut,
-  FlaskConical, LineChart, KeyRound, UserPlus, Brain, ChevronLeft, ChevronRight,
-  ClipboardCheck, History,
+  FlaskConical, KeyRound, UserPlus, Brain, ChevronLeft, ChevronRight,
+  ClipboardCheck, History, UserSearch,
 } from "lucide-react";
 
 const studentLinks = [
@@ -25,7 +25,7 @@ const counselorLinks = [
   { group: "数据分析", items: [
     { path: "/counselor/statistics", label: "统计分析", icon: BarChart3 },
     { path: "/counselor/stat-analysis", label: "统计检验", icon: FlaskConical },
-    { path: "/counselor/model-evaluation", label: "模型评估", icon: LineChart },
+    { path: "/counselor/model-evaluation", label: "群体画像", icon: UserSearch },
   ]},
   { group: "系统管理", items: [
     { path: "/counselor/change-password", label: "修改密码", icon: KeyRound },

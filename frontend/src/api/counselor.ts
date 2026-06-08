@@ -188,6 +188,33 @@ export async function getModelEvaluation() {
   return res.data;
 }
 
+export interface ClusterData {
+  clusters: {
+    cluster_id: number;
+    name: string;
+    count: number;
+    percentage: number;
+    features: {
+      stress_level: number;
+      sleep_duration: number;
+      study_hours: number;
+      social_media_hours: number;
+      physical_activity: number;
+    };
+    risk_distribution: { high: number; medium: number; low: number; none: number };
+    gender_ratio: { male: number; female: number };
+  }[];
+  scatter: { student_id: string; x: number; y: number; cluster: number }[];
+  global_means: Record<string, number>;
+  feature_names: string[];
+  total_students: number;
+}
+
+export async function getClusterAnalysis() {
+  const res = await client.get("/counselor/cluster-analysis");
+  return res.data as ClusterData;
+}
+
 export async function registerCounselor(username: string, password: string, displayName: string) {
   const res = await client.post("/auth/register/counselor", {
     username, password, display_name: displayName,
