@@ -318,7 +318,7 @@ def get_overview(user: dict = Depends(require_role("counselor"))):
     avg_stress = db.execute(text(
         "SELECT ROUND(AVG(stress_level), 2) FROM "
         "(SELECT stress_level FROM behavior_log WHERE id IN "
-        "(SELECT MAX(id) FROM behavior_log GROUP BY student_id))"
+        "(SELECT MAX(id) FROM behavior_log GROUP BY student_id)) AS latest_beh"
     )).scalar() or 0
 
     depressed = db.execute(text(
