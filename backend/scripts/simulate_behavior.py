@@ -1,6 +1,7 @@
 """
 Generate synthetic behavior_log rows for past 12 weeks to simulate longitudinal data.
-Optimized: loads all existing behaviors in one query, then works in-memory.
+Optimized: uses raw SQL to fetch only the latest behavior per student (not all 1.3M rows),
+then generates new rows in pure Python and bulk-inserts via SQL.
 Run after seed_db.py: python scripts/simulate_behavior.py
 """
 import sys
@@ -9,20 +10,17 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import random
 from datetime import date, timedelta
-from collections import defaultdict
-from app.core.database import SessionLocal
-from app.models.student import StudentInfo
-from app.models.behavior import BehaviorLog
+from sqlalchemy import text
+from app.core.database import engine, is_sqlite
 
 WEEKS = 12
 BATCH_SIZE = 5000
 
 
 def simulate():
-    db = SessionLocal()
-    try:
-        total_students = db.query(StudentInfo).count()
-        existing = db.query(BehaviorLog).count()
+    with engine.connect() as conn:
+        total_students = conn.execute(text("SELECT COUNT(*) FROM student_info")).scalar()
+        existing = conn.execute(text("SELECT COUNT(*) FROM behavior_log")).scalar()
         expected = total_students * (WEEKS + 1)
         if existing >= expected:
             print(f"Already have {existing} behavior rows, skipping.")
@@ -30,36 +28,63 @@ def simulate():
 
         print(f"Students: {total_students}, existing behaviors: {existing}, target: {expected}")
 
-        # Load all latest behaviors in one query into a dict
-        print("Loading existing behavior data...")
-        all_behaviors = db.query(BehaviorLog).order_by(BehaviorLog.record_date.desc()).all()
+        # Get latest behavior per student using a single SQL subquery — NOT loading 1.3M rows
+        print("Loading latest behavior per student via SQL...")
+        if is_sqlite():
+            base_rows = conn.execute(text("""
+                SELECT bl.student_id, bl.sleep_duration, bl.study_hours,
+                       bl.social_media_hours, bl.physical_activity, bl.stress_level
+                FROM behavior_log bl
+                INNER JOIN (
+                    SELECT student_id, MAX(id) AS max_id
+                    FROM behavior_log
+                    GROUP BY student_id
+                ) latest ON bl.id = latest.max_id
+            """)).fetchall()
+        else:
+            base_rows = conn.execute(text("""
+                SELECT bl.student_id, bl.sleep_duration, bl.study_hours,
+                       bl.social_media_hours, bl.physical_activity, bl.stress_level
+                FROM behavior_log bl
+                INNER JOIN (
+                    SELECT student_id, MAX(id) AS max_id
+                    FROM behavior_log
+                    GROUP BY student_id
+                ) latest ON bl.id = latest.max_id
+            """)).fetchall()
 
-        # Keep only the latest per student (first occurrence wins since sorted desc)
+        # Build baseline map: student_id → (sleep, study, social, activity, stress)
         base_map = {}
-        for b in all_behaviors:
-            if b.student_id not in base_map:
-                base_map[b.student_id] = b
+        for r in base_rows:
+            base_map[r[0]] = (float(r[1]), float(r[2]), float(r[3]), int(r[4]), int(r[5]))
+        print(f"Loaded {len(base_map)} student baselines.")
 
-        print(f"Loaded {len(base_map)} student behavior baselines.")
-
-        students = db.query(StudentInfo).all()
+        # Get all student IDs
+        students = [r[0] for r in conn.execute(text("SELECT student_id FROM student_info")).fetchall()]
         today = date.today()
 
         # Generate weeks going backwards from today
         for week in range(1, WEEKS + 1):
             record_date = today - timedelta(weeks=week)
+            # ISO 周标签：年份可能跨年，用 %G-W%V（ISO年-ISO周）
+            year_week = record_date.strftime("%G-W%V")
+            insert_sql = text(
+                "INSERT INTO behavior_log (student_id, record_date, year_week, sleep_duration, "
+                "study_hours, social_media_hours, physical_activity, stress_level) "
+                "VALUES (:sid, :dt, :yw, :sleep, :study, :social, :act, :stress)"
+            )
             batch = []
             week_count = 0
 
-            for s in students:
-                base = base_map.get(s.student_id)
-
+            for sid in students:
+                base = base_map.get(sid)
                 if base:
-                    sleep = round(max(3.0, min(12.0, base.sleep_duration + random.uniform(-1.5, 1.5))), 2)
-                    study = round(max(0.0, min(13.0, base.study_hours + random.uniform(-1.5, 1.5))), 2)
-                    social = round(max(0.0, min(10.0, base.social_media_hours + random.uniform(-1.5, 1.5))), 2)
-                    activity = max(0, min(149, int(base.physical_activity + random.randint(-25, 25))))
-                    stress = max(2, min(10, int(base.stress_level + random.randint(-2, 2))))
+                    sleep_b, study_b, social_b, act_b, stress_b = base
+                    sleep = round(max(3.0, min(12.0, sleep_b + random.uniform(-1.5, 1.5))), 2)
+                    study = round(max(0.0, min(13.0, study_b + random.uniform(-1.5, 1.5))), 2)
+                    social = round(max(0.0, min(10.0, social_b + random.uniform(-1.5, 1.5))), 2)
+                    activity = max(0, min(149, act_b + random.randint(-25, 25)))
+                    stress = max(2, min(10, stress_b + random.randint(-2, 2)))
                 else:
                     sleep = round(random.uniform(4, 11), 2)
                     study = round(random.uniform(0, 10), 2)
@@ -67,39 +92,29 @@ def simulate():
                     activity = random.randint(10, 140)
                     stress = random.randint(2, 8)
 
-                new_behavior = BehaviorLog(
-                    student_id=s.student_id,
-                    record_date=record_date,
-                    sleep_duration=sleep,
-                    study_hours=study,
-                    social_media_hours=social,
-                    physical_activity=activity,
-                    stress_level=stress,
-                )
-                batch.append(new_behavior)
-
-                # Update base map so next week varies from this week
-                base_map[s.student_id] = new_behavior
-
+                batch.append({
+                    "sid": sid, "dt": record_date.isoformat(), "yw": year_week,
+                    "sleep": sleep, "study": study, "social": social,
+                    "act": activity, "stress": stress,
+                })
+                # Update base so next week varies from this week
+                base_map[sid] = (sleep, study, social, activity, stress)
                 week_count += 1
 
                 if len(batch) >= BATCH_SIZE:
-                    db.bulk_save_objects(batch)
-                    db.commit()
+                    conn.execute(insert_sql, batch)
+                    conn.commit()
                     print(f"  Week {week}/{WEEKS}: {len(batch)} committed...")
                     batch = []
 
             if batch:
-                db.bulk_save_objects(batch)
-                db.commit()
+                conn.execute(insert_sql, batch)
+                conn.commit()
 
             print(f"  Week {week}/{WEEKS}: {week_count} records (date={record_date})")
 
-        print("Simulation complete!")
-        print(f"Total behavior rows: {db.query(BehaviorLog).count()}")
-
-    finally:
-        db.close()
+        final = conn.execute(text("SELECT COUNT(*) FROM behavior_log")).scalar()
+        print(f"Simulation complete! Total behavior rows: {final}")
 
 
 if __name__ == "__main__":

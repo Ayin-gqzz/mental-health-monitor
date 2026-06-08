@@ -16,10 +16,43 @@ async def lifespan(app: FastAPI):
 
     from sqlalchemy import text
     with engine.begin() as conn:
-        # 创建索引
+        # 创建索引 — 覆盖索引让 MAX(id) GROUP BY student_id 走索引不扫全表
+        # 自动迁移：给 behavior_log / mental_assessment 加 year_week 列（如果还没有）
+        def _col_exists(table, col):
+            if is_sqlite():
+                return any(r[1] == col for r in conn.execute(text(f"PRAGMA table_info({table})")).fetchall())
+            return len(conn.execute(text(
+                f"SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME='{table}' AND COLUMN_NAME='{col}'"
+            )).fetchall()) > 0
+
+        for table, date_col in [("behavior_log", "record_date"), ("mental_assessment", "assessment_date")]:
+            if not _col_exists(table, "year_week"):
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN year_week VARCHAR(10) NOT NULL DEFAULT ''"))
+                wk = "strftime('%Y-W%W', {})" if is_sqlite() else "DATE_FORMAT({}, '%x-W%v')"
+                conn.execute(text(f"UPDATE {table} SET year_week = {wk.format(date_col)}"))
+                print(f"[migrate] Added year_week to {table} and backfilled.")
+
         for idx_sql in [
+            # 已有的索引
             "CREATE INDEX IF NOT EXISTS idx_assess_student_date_desc ON mental_assessment(student_id, assessment_date DESC)",
             "CREATE INDEX IF NOT EXISTS idx_behavior_student_date_desc ON behavior_log(student_id, record_date DESC)",
+            # 覆盖索引：MAX(id) GROUP BY student_id 模式（所有统计接口的核心模式）
+            "CREATE INDEX IF NOT EXISTS idx_behavior_id_student ON behavior_log(id, student_id)",
+            "CREATE INDEX IF NOT EXISTS idx_assess_id_student ON mental_assessment(id, student_id)",
+            # trends 查询：先按日期过滤再聚合
+            "CREATE INDEX IF NOT EXISTS idx_behavior_date_stress ON behavior_log(record_date, stress_level)",
+            "CREATE INDEX IF NOT EXISTS idx_assess_date_depression ON mental_assessment(assessment_date, depression_predicted)",
+            # alerts 查询
+            "CREATE INDEX IF NOT EXISTS idx_notification_risk_read ON risk_notification(risk_level, is_read, created_at DESC)",
+            # assess_all 窗口函数
+            "CREATE INDEX IF NOT EXISTS idx_behavior_student_id_date_desc ON behavior_log(student_id, id DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_assess_student_id_date_desc ON mental_assessment(student_id, id DESC)",
+            # year_week 预计算周标签（trends 查询核心索引）
+            "CREATE INDEX IF NOT EXISTS idx_behavior_year_week ON behavior_log(year_week)",
+            "CREATE INDEX IF NOT EXISTS idx_assess_year_week ON mental_assessment(year_week)",
+            # trends 覆盖索引：WHERE record_date >= ? + GROUP BY year_week + AVG(stress_level) 全部走索引
+            "CREATE INDEX IF NOT EXISTS idx_trends_cover ON behavior_log(record_date, year_week, stress_level)",
+            "CREATE INDEX IF NOT EXISTS idx_assess_trends_cover ON mental_assessment(assessment_date, year_week, depression_predicted)",
         ]:
             try:
                 conn.execute(text(idx_sql))
@@ -110,6 +143,18 @@ async def lifespan(app: FastAPI):
                     ) latest ON ma.student_id = latest.student_id AND ma.assessment_date = latest.max_date
                     WHERE ma.risk_level = 'high'
                 """))
+
+        # 预聚合表：首次启动时刷新（之后 trends 查询直接读这张表，毫秒级）
+        try:
+            _has = conn.execute(text("SELECT COUNT(*) FROM weekly_behavior_stats")).scalar()
+        except Exception:
+            _has = 0
+        if _has == 0:
+            print("[startup] Refreshing weekly stats (first run, ~30s)...")
+            from scripts.refresh_weekly_stats import refresh_all
+            refresh_all(conn=conn)
+            print("[startup] Weekly stats ready.")
+
     yield
 
 

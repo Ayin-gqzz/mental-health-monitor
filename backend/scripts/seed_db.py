@@ -60,13 +60,16 @@ def seed():
 
         # Behaviors
         print("Inserting behavior logs...")
+        from datetime import datetime
+        _init_date = "2026-05-21"
+        _init_yw = datetime.strptime(_init_date, "%Y-%m-%d").strftime("%G-W%V")
         for i in range(0, len(rows), BATCH):
             batch = rows[i:i + BATCH]
             vals = []
             for r in batch:
                 sid = str(int(float(r["Student_ID"])))
                 vals.append({
-                    "sid": sid, "date": "2026-05-21",
+                    "sid": sid, "date": _init_date, "yw": _init_yw,
                     "sleep": round(float(r["Sleep_Duration"]), 2),
                     "study": round(float(r["Study_Hours"]), 2),
                     "social": round(float(r["Social_Media_Hours"]), 2),
@@ -74,8 +77,8 @@ def seed():
                     "stress": int(float(r["Stress_Level"])),
                 })
             conn.execute(
-                text("INSERT INTO behavior_log (student_id, record_date, sleep_duration, study_hours, social_media_hours, physical_activity, stress_level) "
-                     "VALUES (:sid, :date, :sleep, :study, :social, :activity, :stress)"),
+                text("INSERT INTO behavior_log (student_id, record_date, year_week, sleep_duration, study_hours, social_media_hours, physical_activity, stress_level) "
+                     "VALUES (:sid, :date, :yw, :sleep, :study, :social, :activity, :stress)"),
                 vals,
             )
             conn.commit()

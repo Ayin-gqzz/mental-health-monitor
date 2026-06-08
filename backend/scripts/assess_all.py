@@ -80,6 +80,7 @@ def main():
         batch.append(MentalAssessment(
             student_id=sid,
             assessment_date=date.today(),
+            year_week=date.today().strftime("%G-W%V"),
             depression_predicted=r.depression_predicted,
             depression_probability=round(r.depression_probability, 4),
             risk_level=r.risk_level,

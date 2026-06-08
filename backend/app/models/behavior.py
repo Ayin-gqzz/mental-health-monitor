@@ -8,6 +8,7 @@ class BehaviorLog(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     student_id = Column(String(20), ForeignKey("student_info.student_id", ondelete="CASCADE"), nullable=False)
     record_date = Column(Date, nullable=False, server_default=today_expr())
+    year_week = Column(String(10), nullable=False, index=True, comment="预计算的周标签，如 2026-W23")
     sleep_duration = Column(Float, nullable=False)
     study_hours = Column(Float, nullable=False)
     social_media_hours = Column(Float, nullable=False)

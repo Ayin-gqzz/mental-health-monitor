@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS behavior_log (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     student_id          VARCHAR(20) NOT NULL,
     record_date         DATE        NOT NULL DEFAULT (date('now')),
+    year_week           VARCHAR(10) NOT NULL DEFAULT '',
     sleep_duration      REAL        NOT NULL CHECK(sleep_duration BETWEEN 0 AND 24),
     study_hours         REAL        NOT NULL CHECK(study_hours >= 0),
     social_media_hours  REAL        NOT NULL CHECK(social_media_hours >= 0),
@@ -32,6 +33,7 @@ CREATE TABLE IF NOT EXISTS behavior_log (
 CREATE INDEX IF NOT EXISTS idx_behavior_student_date ON behavior_log(student_id, record_date);
 CREATE INDEX IF NOT EXISTS idx_behavior_date         ON behavior_log(record_date);
 CREATE INDEX IF NOT EXISTS idx_behavior_stress_date  ON behavior_log(stress_level, record_date);
+CREATE INDEX IF NOT EXISTS idx_behavior_year_week    ON behavior_log(year_week);
 
 -- ============================================================
 -- Table 3: mental_assessment — ML prediction results
@@ -40,6 +42,7 @@ CREATE TABLE IF NOT EXISTS mental_assessment (
     id                      INTEGER PRIMARY KEY AUTOINCREMENT,
     student_id              VARCHAR(20) NOT NULL,
     assessment_date         DATE NOT NULL DEFAULT (date('now')),
+    year_week               VARCHAR(10) NOT NULL DEFAULT '',
     depression_predicted    BOOLEAN NOT NULL,
     depression_probability  REAL NOT NULL,
     risk_level              VARCHAR(10) NOT NULL CHECK(risk_level IN ('low', 'medium', 'high')),
@@ -51,6 +54,7 @@ CREATE TABLE IF NOT EXISTS mental_assessment (
 CREATE INDEX IF NOT EXISTS idx_assessment_student_date ON mental_assessment(student_id, assessment_date);
 CREATE INDEX IF NOT EXISTS idx_assessment_risk         ON mental_assessment(risk_level);
 CREATE INDEX IF NOT EXISTS idx_assessment_date_risk    ON mental_assessment(assessment_date, risk_level);
+CREATE INDEX IF NOT EXISTS idx_assess_year_week        ON mental_assessment(year_week);
 
 -- ============================================================
 -- Table 4: counselor_user — counselor login accounts

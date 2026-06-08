@@ -233,9 +233,11 @@ def trigger_assessment(student_id: str, user: dict = Depends(require_role("couns
         "physical_activity": behavior.physical_activity,
     })
 
+    today = date.today()
     assessment = MentalAssessment(
         student_id=student_id,
-        assessment_date=date.today(),
+        assessment_date=today,
+        year_week=today.strftime("%G-W%V"),
         depression_predicted=result.depression_predicted,
         depression_probability=round(result.depression_probability, 4),
         risk_level=result.risk_level,
@@ -253,51 +255,60 @@ def trigger_assess_all(user: dict = Depends(require_role("counselor"))):
     from app.services.ml_service import MLService
     from app.services.suggestion_service import generate_suggestion
 
-    students = db.query(StudentInfo).all()
     try:
         ml = MLService()
         has_model = True
     except FileNotFoundError:
         has_model = False
 
+    # 一次查询拿到所有学生 + 最新行为，避免 N+1（原方案10万次单条查询）
+    rows = db.execute(text("""
+        SELECT si.student_id, si.age, si.gender, si.department, si.cgpa,
+               bl.sleep_duration, bl.study_hours, bl.social_media_hours,
+               bl.physical_activity, bl.stress_level
+        FROM student_info si
+        INNER JOIN (
+            SELECT student_id, sleep_duration, study_hours, social_media_hours,
+                   physical_activity, stress_level,
+                   ROW_NUMBER() OVER (PARTITION BY student_id ORDER BY record_date DESC) AS rn
+            FROM behavior_log
+        ) bl ON si.student_id = bl.student_id AND bl.rn = 1
+    """)).fetchall()
+
     count = 0
-    for s in students:
-        behavior = db.query(BehaviorLog).filter(
-            BehaviorLog.student_id == s.student_id
-        ).order_by(BehaviorLog.record_date.desc()).first()
-        if not behavior:
-            continue
+    batch = []
+    for r in rows:
+        sid, age, gender, dept, cgpa = r[0], r[1], r[2], r[3], r[4]
+        sleep_dur, study_hrs, social_hrs, phys_act, stress_lvl = r[5], r[6], r[7], r[8], r[9]
 
         if has_model:
             result = ml.predict({
-                "age": s.age, "gender": s.gender, "department": s.department, "cgpa": s.cgpa,
+                "age": age, "gender": gender, "department": dept, "cgpa": cgpa,
             }, {
-                "sleep_duration": behavior.sleep_duration,
-                "study_hours": behavior.study_hours,
-                "social_media_hours": behavior.social_media_hours,
-                "physical_activity": behavior.physical_activity,
-                "stress_level": behavior.stress_level,
+                "sleep_duration": sleep_dur, "study_hours": study_hrs,
+                "social_media_hours": social_hrs, "physical_activity": phys_act,
+                "stress_level": stress_lvl,
             })
         else:
-            prob = 0.42 if behavior.stress_level >= 8 else 0.09
+            prob = 0.42 if stress_lvl >= 8 else 0.09
             result = type("Result", (), {})()
-            result.depression_predicted = behavior.stress_level >= 8
+            result.depression_predicted = stress_lvl >= 8
             result.depression_probability = prob
-            result.risk_level = "high" if behavior.stress_level >= 8 else (
-                "medium" if behavior.stress_level >= 6 else "low"
+            result.risk_level = "high" if stress_lvl >= 8 else (
+                "medium" if stress_lvl >= 6 else "low"
             )
 
         intervention = generate_suggestion(result, {
-            "stress_level": behavior.stress_level,
-            "sleep_duration": behavior.sleep_duration,
-            "study_hours": behavior.study_hours,
-            "social_media_hours": behavior.social_media_hours,
-            "physical_activity": behavior.physical_activity,
+            "stress_level": stress_lvl, "sleep_duration": sleep_dur,
+            "study_hours": study_hrs, "social_media_hours": social_hrs,
+            "physical_activity": phys_act,
         })
 
-        db.add(MentalAssessment(
-            student_id=s.student_id,
+        today_str = date.today().isoformat()
+        batch.append(MentalAssessment(
+            student_id=sid,
             assessment_date=date.today(),
+            year_week=date.today().strftime("%G-W%V"),
             depression_predicted=result.depression_predicted,
             depression_probability=round(result.depression_probability, 4),
             risk_level=result.risk_level,
@@ -305,9 +316,13 @@ def trigger_assess_all(user: dict = Depends(require_role("counselor"))):
         ))
         count += 1
 
-        if count % 5000 == 0:
+        if len(batch) >= 5000:
+            db.add_all(batch)
             db.commit()
+            batch = []
 
+    if batch:
+        db.add_all(batch)
     db.commit()
     return {"assessed": count}
 
@@ -325,30 +340,27 @@ def get_overview(user: dict = Depends(require_role("counselor"))):
 
     db = user["db"]
 
-    total = db.query(StudentInfo).count()
+    # 单条SQL拿学生总数 + 风险分布 + 抑郁人数，避免4次独立全表扫描
+    row = db.execute(text("""
+        SELECT
+            (SELECT COUNT(*) FROM student_info) AS total,
+            (SELECT COUNT(*) FROM v_latest_assessment WHERE risk_level = 'high') AS high_risk,
+            (SELECT COUNT(*) FROM v_latest_assessment WHERE risk_level = 'medium') AS medium_risk,
+            (SELECT COUNT(*) FROM v_latest_assessment WHERE risk_level = 'low') AS low_risk,
+            (SELECT COUNT(*) FROM v_latest_assessment WHERE depression_predicted = 1) AS depressed,
+            (SELECT ROUND(AVG(bl.stress_level), 2) FROM behavior_log bl
+             INNER JOIN (SELECT MAX(id) AS max_id FROM behavior_log GROUP BY student_id) latest
+             ON bl.id = latest.max_id) AS avg_stress
+    """)).fetchone()
 
-    risk_counts = db.execute(text(
-        "SELECT risk_level, COUNT(*) FROM v_latest_assessment GROUP BY risk_level"
-    )).fetchall()
-    risk_map = {r[0]: r[1] for r in risk_counts}
-
-    avg_stress = db.execute(text(
-        "SELECT ROUND(AVG(bl.stress_level), 2) FROM behavior_log bl "
-        "INNER JOIN (SELECT MAX(id) AS max_id FROM behavior_log GROUP BY student_id) latest "
-        "ON bl.id = latest.max_id"
-    )).scalar() or 0
-
-    depressed = db.execute(text(
-        "SELECT COUNT(*) FROM v_latest_assessment WHERE depression_predicted = 1"
-    )).scalar() or 0
-
+    total = row[0] or 0
     result = OverviewStats(
         total_students=total,
-        high_risk_count=risk_map.get("high", 0),
-        medium_risk_count=risk_map.get("medium", 0),
-        low_risk_count=risk_map.get("low", 0),
-        avg_stress=round(float(avg_stress), 2),
-        depression_rate=round(depressed / total * 100, 1) if total > 0 else 0,
+        high_risk_count=row[1] or 0,
+        medium_risk_count=row[2] or 0,
+        low_risk_count=row[3] or 0,
+        avg_stress=round(float(row[5] or 0), 2),
+        depression_rate=round((row[4] or 0) / total * 100, 1) if total > 0 else 0,
     )
     _overview_cache["data"] = result
     _overview_cache["timestamp"] = _time.time()
@@ -359,45 +371,44 @@ def get_overview(user: dict = Depends(require_role("counselor"))):
 def get_department_stats(user: dict = Depends(require_role("counselor"))):
     db = user["db"]
 
-    # Student counts + avg CGPA per department
+    # 查询1: 学生基础统计（人数 + 平均绩点）
     dept_info = db.execute(text(
         "SELECT department, COUNT(*) AS cnt, ROUND(AVG(cgpa), 2) AS avg_cgpa "
         "FROM student_info GROUP BY department"
     )).fetchall()
     dept_map = {r[0]: {"count": r[1], "avg_cgpa": r[2]} for r in dept_info}
 
-    # Risk counts per department via view
-    risk_rows = db.execute(text(
-        "SELECT si.department, la.risk_level, COUNT(*) "
-        "FROM v_latest_assessment la "
-        "JOIN student_info si ON la.student_id = si.student_id "
-        "GROUP BY si.department, la.risk_level"
-    )).fetchall()
+    # 查询2: 用一条SQL拿院系维度的 最新风险分布 + 抑郁人数 + 平均压力
+    #        避免原来 3 条独立SQL各扫一遍 behavior_log (130万行) + v_latest_assessment
+    dept_stats_rows = db.execute(text("""
+        SELECT
+            si.department,
+            ma.risk_level,
+            COUNT(*) AS risk_cnt,
+            SUM(CASE WHEN ma.depression_predicted = 1 THEN 1 ELSE 0 END) AS depressed_cnt
+        FROM student_info si
+        INNER JOIN mental_assessment ma ON si.student_id = ma.student_id
+        INNER JOIN (
+            SELECT student_id, MAX(id) AS max_id FROM mental_assessment GROUP BY student_id
+        ) latest ON ma.id = latest.max_id
+        GROUP BY si.department, ma.risk_level
+    """)).fetchall()
 
-    risk_dept: dict = {}
-    for dept, risk, cnt in risk_rows:
-        if dept not in risk_dept:
-            risk_dept[dept] = {"high": 0, "medium": 0, "low": 0}
-        risk_dept[dept][risk] = cnt
-
-    # Depression counts per department
-    dep_rows = db.execute(text(
-        "SELECT si.department, COUNT(*) "
-        "FROM v_latest_assessment la "
-        "JOIN student_info si ON la.student_id = si.student_id "
-        "WHERE la.depression_predicted = 1 "
-        "GROUP BY si.department"
-    )).fetchall()
-    dep_map = {r[0]: r[1] for r in dep_rows}
-
-    # Average stress per department
+    # 查询3: 从预聚合表读每院系平均压力（不扫130万行）
     stress_rows = db.execute(text(
-        "SELECT si.department, ROUND(AVG(bl.stress_level), 2) "
-        "FROM behavior_log bl "
-        "JOIN student_info si ON bl.student_id = si.student_id "
-        "GROUP BY si.department"
+        "SELECT department, avg_stress FROM weekly_behavior_stats "
+        "WHERE department != '__ALL__' GROUP BY department"
     )).fetchall()
     stress_map = {r[0]: r[1] for r in stress_rows}
+
+    # 汇总 risk + depression
+    risk_dept: dict = {}
+    dep_map: dict = {}
+    for dept, risk, risk_cnt, depressed_cnt in dept_stats_rows:
+        if dept not in risk_dept:
+            risk_dept[dept] = {"high": 0, "medium": 0, "low": 0}
+        risk_dept[dept][risk] = risk_cnt
+        dep_map[dept] = dep_map.get(dept, 0) + depressed_cnt
 
     results = []
     for dept, info in dept_map.items():
@@ -422,43 +433,29 @@ def get_trends(
 ):
     import time as _time
     cache_key = f"trends_{department}"
-    if cache_key in _trends_cache and _time.time() - _trends_cache[cache_key]["time"] < 600:
+    if cache_key in _trends_cache and _time.time() - _trends_cache[cache_key]["time"] < 1800:
         return _trends_cache[cache_key]["data"]
 
     db = user["db"]
-    end = date.today()
-    start = end - timedelta(weeks=12)
 
-    base = db.query(
-        week_label(BehaviorLog.record_date),
-        func.avg(BehaviorLog.stress_level).label("avg_stress"),
-    ).filter(BehaviorLog.record_date >= start.isoformat())
+    # 直接读预聚合表（~60行，毫秒级），不扫百万行原始数据
+    dept_filter = department if department else "__ALL__"
+    stress_rows = db.execute(text(
+        "SELECT year_week, avg_stress FROM weekly_behavior_stats "
+        "WHERE department = :dept ORDER BY year_week"
+    ), {"dept": dept_filter}).fetchall()
 
-    if department:
-        base = base.join(StudentInfo, BehaviorLog.student_id == StudentInfo.student_id).filter(
-            StudentInfo.department == department
-        )
+    dep_rows = db.execute(text(
+        "SELECT year_week, depression_count FROM weekly_depression_stats "
+        "WHERE department = :dept ORDER BY year_week"
+    ), {"dept": dept_filter}).fetchall()
 
-    rows = base.group_by("week").order_by("week").all()
-
-    depression_sub = db.query(
-        week_label(MentalAssessment.assessment_date),
-        func.count(MentalAssessment.id).label("cnt"),
-    ).filter(
-        MentalAssessment.assessment_date >= start.isoformat(),
-        MentalAssessment.depression_predicted == True,
-    )
-    if department:
-        depression_sub = depression_sub.join(
-            StudentInfo, MentalAssessment.student_id == StudentInfo.student_id
-        ).filter(StudentInfo.department == department)
-    depression_rows = depression_sub.group_by("week").all()
-    dep_map = {r.week: r.cnt for r in depression_rows}
+    dep_map = {r[0]: r[1] for r in dep_rows}
 
     result = [
-        TrendPoint(week=r.week, avg_stress=round(r.avg_stress, 2),
-                   depression_count=dep_map.get(r.week, 0))
-        for r in rows
+        TrendPoint(week=r[0], avg_stress=round(float(r[1]), 2),
+                   depression_count=dep_map.get(r[0], 0))
+        for r in stress_rows
     ]
     _trends_cache[cache_key] = {"data": result, "time": _time.time()}
     return result
@@ -504,20 +501,18 @@ def get_alerts(
         (page - 1) * page_size
     ).limit(page_size).all()
 
-    # Get latest assessment data for displayed students
+    # Get latest assessment data for displayed students — 用 MAX(id) 代替 ROW_NUMBER()
     student_ids = [r.student_id for r in rows]
     assess_map = {}
     if student_ids:
-        sub = db.query(
-            MentalAssessment.student_id,
-            MentalAssessment.depression_probability,
-            MentalAssessment.assessment_date,
-            func.row_number().over(
-                partition_by=MentalAssessment.student_id,
-                order_by=MentalAssessment.assessment_date.desc(),
-            ).label("rn"),
-        ).filter(MentalAssessment.student_id.in_(student_ids)).subquery()
-        a_rows = db.query(sub.c.student_id, sub.c.depression_probability, sub.c.assessment_date).filter(sub.c.rn == 1).all()
+        placeholders = ",".join([f"'{sid}'" for sid in student_ids])
+        a_rows = db.execute(text(
+            f"SELECT ma.student_id, ma.depression_probability, ma.assessment_date "
+            f"FROM mental_assessment ma "
+            f"INNER JOIN (SELECT student_id, MAX(id) AS max_id FROM mental_assessment "
+            f"WHERE student_id IN ({placeholders}) GROUP BY student_id) latest "
+            f"ON ma.id = latest.max_id"
+        )).fetchall()
         assess_map = {r[0]: {"prob": r[1], "date": r[2]} for r in a_rows}
 
     items = []
@@ -571,52 +566,45 @@ def mark_all_as_read(user: dict = Depends(require_role("counselor"))):
     return {"status": "ok"}
 
 
-# ── Statistical analysis ─────────────────────────────────────
+# ── Statistical analysis（共享基础数据缓存，只查一次百万行）────────
+
+_stat_base_cache = {"data": None, "timestamp": 0}
+_STAT_TTL = 1800  # 30 分钟
+
+
+def _get_stat_base(db):
+    """获取统计检验的基础数据：从预聚合表 student_latest_stats 读（10万行，毫秒级）"""
+    import time as _t
+    if _stat_base_cache["data"] is not None and _t.time() - _stat_base_cache["timestamp"] < _STAT_TTL:
+        return _stat_base_cache["data"]
+
+    rows = db.execute(text(
+        "SELECT student_id, stress_level, sleep_duration, study_hours, "
+        "social_media_hours, physical_activity, "
+        "risk_level, depression_predicted, depression_probability, gender "
+        "FROM student_latest_stats"
+    )).fetchall()
+
+    _stat_base_cache["data"] = rows
+    _stat_base_cache["timestamp"] = _t.time()
+    return rows
+
 
 @router.get("/statistics/t-test", response_model=list[TTestResult])
 def run_t_tests(user: dict = Depends(require_role("counselor"))):
-    db = user["db"]
     from scipy import stats
+    rows = _get_stat_base(user["db"])
 
-    # Latest assessment per student
-    assess_sub = db.query(
-        MentalAssessment.student_id, MentalAssessment.risk_level,
-        func.row_number().over(
-            partition_by=MentalAssessment.student_id,
-            order_by=MentalAssessment.assessment_date.desc(),
-        ).label("rn"),
-    ).subquery()
-
-    # Latest behavior per student
-    beh_sub = db.query(
-        BehaviorLog.student_id,
-        BehaviorLog.stress_level, BehaviorLog.sleep_duration,
-        BehaviorLog.study_hours, BehaviorLog.social_media_hours,
-        BehaviorLog.physical_activity,
-        func.row_number().over(
-            partition_by=BehaviorLog.student_id,
-            order_by=BehaviorLog.record_date.desc(),
-        ).label("rn"),
-    ).subquery()
-
-    # Join: get behavior + risk for each student
-    rows = db.query(
-        beh_sub.c.stress_level, beh_sub.c.sleep_duration,
-        beh_sub.c.study_hours, beh_sub.c.social_media_hours,
-        beh_sub.c.physical_activity, assess_sub.c.risk_level,
-    ).join(
-        assess_sub, (beh_sub.c.student_id == assess_sub.c.student_id) & (assess_sub.c.rn == 1)
-    ).filter(beh_sub.c.rn == 1).all()
-
-    high = [r for r in rows if r.risk_level == "high"]
-    low = [r for r in rows if r.risk_level == "low"]
+    # (student_id, stress, sleep, study, social, activity, risk_level, dep_pred, dep_prob, gender)
+    high = [r for r in rows if r[6] == "high"]
+    low = [r for r in rows if r[6] == "low"]
 
     metrics = [
-        ("stress_level", "压力水平", lambda r: r.stress_level),
-        ("sleep_duration", "睡眠时长", lambda r: r.sleep_duration),
-        ("study_hours", "学习时长", lambda r: r.study_hours),
-        ("social_media_hours", "社交媒体时长", lambda r: r.social_media_hours),
-        ("physical_activity", "运动时长", lambda r: r.physical_activity),
+        ("stress_level", "压力水平", lambda r: r[1]),
+        ("sleep_duration", "睡眠时长", lambda r: r[2]),
+        ("study_hours", "学习时长", lambda r: r[3]),
+        ("social_media_hours", "社交媒体时长", lambda r: r[4]),
+        ("physical_activity", "运动时长", lambda r: r[5]),
     ]
 
     results = []
@@ -639,29 +627,14 @@ def run_t_tests(user: dict = Depends(require_role("counselor"))):
 
 @router.get("/statistics/chi-square", response_model=ChiSquareResult)
 def run_chi_square(user: dict = Depends(require_role("counselor"))):
-    db = user["db"]
     from scipy import stats
+    rows = _get_stat_base(user["db"])
 
-    # Latest assessment per student
-    assess_sub = db.query(
-        MentalAssessment.student_id, MentalAssessment.depression_predicted,
-        func.row_number().over(
-            partition_by=MentalAssessment.student_id,
-            order_by=MentalAssessment.assessment_date.desc(),
-        ).label("rn"),
-    ).subquery()
-
-    rows = db.query(
-        StudentInfo.gender, assess_sub.c.depression_predicted,
-    ).join(
-        assess_sub, (StudentInfo.student_id == assess_sub.c.student_id) & (assess_sub.c.rn == 1)
-    ).all()
-
-    # Build 2x2 contingency table
-    table = [[0, 0], [0, 0]]  # [[male_no, male_yes], [female_no, female_yes]]
+    # gender=r[9], depression_predicted=r[7]
+    table = [[0, 0], [0, 0]]
     for r in rows:
-        row_idx = 0 if r.gender == "Male" else 1
-        col_idx = 1 if r.depression_predicted else 0
+        row_idx = 0 if r[9] == "Male" else 1
+        col_idx = 1 if r[7] else 0
         table[row_idx][col_idx] += 1
 
     chi2, p, dof, _ = stats.chi2_contingency(table)
@@ -676,42 +649,16 @@ def run_chi_square(user: dict = Depends(require_role("counselor"))):
 
 @router.get("/statistics/correlation", response_model=list[CorrelationResult])
 def run_correlation(user: dict = Depends(require_role("counselor"))):
-    db = user["db"]
     from scipy import stats
+    rows = _get_stat_base(user["db"])
 
-    # Latest assessment per student
-    assess_sub = db.query(
-        MentalAssessment.student_id, MentalAssessment.depression_predicted,
-        func.row_number().over(
-            partition_by=MentalAssessment.student_id,
-            order_by=MentalAssessment.assessment_date.desc(),
-        ).label("rn"),
-    ).subquery()
-
-    # Latest behavior per student
-    beh_sub = db.query(
-        BehaviorLog.student_id,
-        BehaviorLog.stress_level, BehaviorLog.sleep_duration,
-        BehaviorLog.social_media_hours,
-        func.row_number().over(
-            partition_by=BehaviorLog.student_id,
-            order_by=BehaviorLog.record_date.desc(),
-        ).label("rn"),
-    ).subquery()
-
-    rows = db.query(
-        beh_sub.c.stress_level, beh_sub.c.sleep_duration,
-        beh_sub.c.social_media_hours, assess_sub.c.depression_predicted,
-    ).join(
-        assess_sub, (beh_sub.c.student_id == assess_sub.c.student_id) & (assess_sub.c.rn == 1)
-    ).filter(beh_sub.c.rn == 1).all()
-
-    depression = [1 if r.depression_predicted else 0 for r in rows]
+    # stress=r[1], sleep=r[2], social=r[4], depression_predicted=r[7]
+    depression = [1 if r[7] else 0 for r in rows]
 
     variables = [
-        ("stress_level", "压力水平", [r.stress_level for r in rows]),
-        ("sleep_duration", "睡眠时长", [r.sleep_duration for r in rows]),
-        ("social_media_hours", "社交媒体时长", [r.social_media_hours for r in rows]),
+        ("stress_level", "压力水平", [r[1] for r in rows]),
+        ("sleep_duration", "睡眠时长", [r[2] for r in rows]),
+        ("social_media_hours", "社交媒体时长", [r[4] for r in rows]),
     ]
 
     results = []
@@ -735,19 +682,17 @@ def run_correlation(user: dict = Depends(require_role("counselor"))):
 def get_stress_distribution(user: dict = Depends(require_role("counselor"))):
     db = user["db"]
 
-    sub = db.query(
-        BehaviorLog.student_id, BehaviorLog.stress_level,
-        func.row_number().over(
-            partition_by=BehaviorLog.student_id,
-            order_by=BehaviorLog.record_date.desc(),
-        ).label("rn"),
-    ).subquery()
+    rows = db.execute(text("""
+        SELECT bl.stress_level, COUNT(*) AS count
+        FROM behavior_log bl
+        INNER JOIN (
+            SELECT student_id, MAX(id) AS max_id FROM behavior_log GROUP BY student_id
+        ) latest ON bl.id = latest.max_id
+        GROUP BY bl.stress_level
+        ORDER BY bl.stress_level
+    """)).fetchall()
 
-    rows = db.query(
-        sub.c.stress_level, func.count().label("count")
-    ).filter(sub.c.rn == 1).group_by(sub.c.stress_level).order_by(sub.c.stress_level).all()
-
-    return [{"stress_level": r.stress_level, "count": r.count} for r in rows]
+    return [{"stress_level": r[0], "count": r[1]} for r in rows]
 
 
 _cluster_cache = {"data": None, "timestamp": 0}
@@ -767,31 +712,20 @@ def get_cluster_analysis(user: dict = Depends(require_role("counselor"))):
 
     db = user["db"]
 
-    # 获取每个学生最新行为数据
-    beh_sub = db.query(
-        BehaviorLog.student_id,
-        BehaviorLog.stress_level,
-        BehaviorLog.sleep_duration,
-        BehaviorLog.study_hours,
-        BehaviorLog.social_media_hours,
-        BehaviorLog.physical_activity,
-        func.row_number().over(
-            partition_by=BehaviorLog.student_id,
-            order_by=BehaviorLog.record_date.desc(),
-        ).label("rn"),
-    ).subquery()
-
-    rows = db.query(
-        beh_sub.c.student_id, beh_sub.c.stress_level, beh_sub.c.sleep_duration,
-        beh_sub.c.study_hours, beh_sub.c.social_media_hours, beh_sub.c.physical_activity,
-    ).filter(beh_sub.c.rn == 1).all()
+    # 从预聚合表读（10万行，毫秒级），不扫130万行原始数据
+    rows = db.execute(text(
+        "SELECT student_id, stress_level, sleep_duration, study_hours, "
+        "social_media_hours, physical_activity, risk_level, gender "
+        "FROM student_latest_stats"
+    )).fetchall()
 
     if len(rows) < 10:
         raise HTTPException(400, "数据不足，至少需要10条行为记录")
 
-    student_ids = [r.student_id for r in rows]
+    # rows: (student_id, stress, sleep, study, social, activity, risk_level, gender)
+    student_ids = [r[0] for r in rows]
     X = np.array([
-        [r.stress_level, r.sleep_duration, r.study_hours, r.social_media_hours, r.physical_activity]
+        [r[1], r[2], r[3], r[4], r[5]]
         for r in rows
     ], dtype=float)
 
@@ -812,20 +746,9 @@ def get_cluster_analysis(user: dict = Depends(require_role("counselor"))):
     # 聚类中心（原始尺度）
     centers_original = scaler.inverse_transform(kmeans.cluster_centers_)
 
-    # 一次性查询所有学生的最新风险等级（避免 IN 子句变量过多）
-    risk_sub = db.query(
-        MentalAssessment.student_id, MentalAssessment.risk_level,
-        func.row_number().over(
-            partition_by=MentalAssessment.student_id,
-            order_by=MentalAssessment.assessment_date.desc(),
-        ).label("rn"),
-    ).subquery()
-    all_risk_rows = db.query(risk_sub.c.student_id, risk_sub.c.risk_level).filter(risk_sub.c.rn == 1).all()
-    risk_map = {r.student_id: (r.risk_level or "none") for r in all_risk_rows}
-
-    # 一次性查询所有学生性别
-    all_gender_rows = db.query(StudentInfo.student_id, StudentInfo.gender).all()
-    gender_map = {r.student_id: r.gender for r in all_gender_rows}
+    # risk 和 gender 已经在 rows 里了（r[6]=risk_level, r[7]=gender），不需要额外查询
+    risk_map = {r[0]: (r[6] or "none") for r in rows}
+    gender_map = {r[0]: r[7] for r in rows}
 
     # 每个聚类的统计
     clusters = []
@@ -919,39 +842,8 @@ def get_cluster_analysis(user: dict = Depends(require_role("counselor"))):
 def run_complex_query(user: dict = Depends(require_role("counselor"))):
     db = user["db"]
 
-    # Slow version: correlated subquery
-    slow_sql = """
-    SELECT si.department,
-           COUNT(DISTINCT bl.student_id) AS total_students,
-           ROUND(AVG(bl.stress_level), 2) AS avg_stress,
-           ROUND(AVG(bl.sleep_duration), 2) AS avg_sleep,
-           COUNT(DISTINCT CASE WHEN ma.risk_level = 'high'
-               THEN ma.student_id END) AS high_risk_count
-    FROM behavior_log bl
-    JOIN student_info si ON bl.student_id = si.student_id
-    LEFT JOIN mental_assessment ma ON bl.student_id = ma.student_id
-        AND ma.id = (SELECT MAX(id) FROM mental_assessment WHERE student_id = bl.student_id)
-    WHERE bl.record_date >= DATE('now', '-30 days')
-    GROUP BY si.department
-    ORDER BY high_risk_count DESC
-    """
-
-    t0 = time.time()
-    db.execute(text(slow_sql)).fetchall()
-    slow_time = round((time.time() - t0) * 1000, 2)
-
-    # Fast version: CTE with ROW_NUMBER
+    # 只跑优化版本，不再故意执行慢查询（关联子查询在130万行上会锁表）
     fast_sql = """
-    WITH latest_assessment AS (
-        SELECT student_id, risk_level,
-               ROW_NUMBER() OVER (PARTITION BY student_id ORDER BY assessment_date DESC) AS rn
-        FROM mental_assessment
-    ),
-    recent_behavior AS (
-        SELECT student_id, stress_level, sleep_duration
-        FROM behavior_log
-        WHERE record_date >= DATE('now', '-30 days')
-    )
     SELECT si.department,
            COUNT(DISTINCT rb.student_id) AS total_students,
            ROUND(AVG(rb.stress_level), 2) AS avg_stress,
@@ -959,22 +851,28 @@ def run_complex_query(user: dict = Depends(require_role("counselor"))):
            COUNT(DISTINCT CASE WHEN la.risk_level = 'high'
                THEN la.student_id END) AS high_risk_count
     FROM student_info si
-    JOIN recent_behavior rb ON si.student_id = rb.student_id
-    LEFT JOIN latest_assessment la ON si.student_id = la.student_id AND la.rn = 1
+    JOIN (
+        SELECT student_id, stress_level, sleep_duration
+        FROM behavior_log
+        WHERE record_date >= DATE('now', '-30 days')
+    ) rb ON si.student_id = rb.student_id
+    LEFT JOIN (
+        SELECT student_id, risk_level
+        FROM mental_assessment ma
+        INNER JOIN (
+            SELECT student_id, MAX(id) AS max_id FROM mental_assessment GROUP BY student_id
+        ) latest ON ma.id = latest.max_id
+    ) la ON si.student_id = la.student_id
     GROUP BY si.department
     ORDER BY high_risk_count DESC
     """
 
     t0 = time.time()
     result = db.execute(text(fast_sql)).fetchall()
-    fast_time = round((time.time() - t0) * 1000, 2)
-
-    improvement = round((slow_time - fast_time) / slow_time * 100, 1) if slow_time > 0 else 0
+    query_time = round((time.time() - t0) * 1000, 2)
 
     return {
-        "slow_query_ms": slow_time,
-        "optimized_query_ms": fast_time,
-        "improvement_pct": improvement,
+        "optimized_query_ms": query_time,
         "data": [
             {"department": r[0], "total_students": r[1], "avg_stress": r[2],
              "avg_sleep": r[3], "high_risk_count": r[4]}

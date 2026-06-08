@@ -89,26 +89,26 @@ def get_latest_behavior(user: dict = Depends(require_role("student"))):
 
 @router.get("/behavior/trend", response_model=list[BehaviorTrendPoint])
 def get_behavior_trend(user: dict = Depends(require_role("student"))):
+    from sqlalchemy import text
     db = user["db"]
+    sid = _student_id(user)
     end = date.today()
     start = end - timedelta(weeks=12)
-    rows = db.query(
-        week_label(BehaviorLog.record_date),
-        func.avg(BehaviorLog.stress_level).label("avg_stress"),
-        func.avg(BehaviorLog.sleep_duration).label("avg_sleep"),
-        func.avg(BehaviorLog.study_hours).label("avg_study"),
-        func.avg(BehaviorLog.social_media_hours).label("avg_social"),
-        func.avg(BehaviorLog.physical_activity).label("avg_activity"),
-    ).filter(
-        BehaviorLog.student_id == _student_id(user),
-        BehaviorLog.record_date >= start.isoformat(),
-    ).group_by("week").order_by("week").all()
+
+    # 直接 GROUP BY 预计算的 year_week，不走函数
+    rows = db.execute(text(
+        "SELECT year_week, ROUND(AVG(stress_level), 2), ROUND(AVG(sleep_duration), 2), "
+        "ROUND(AVG(study_hours), 2), ROUND(AVG(social_media_hours), 2), ROUND(AVG(physical_activity), 2) "
+        "FROM behavior_log "
+        "WHERE student_id = :sid AND record_date >= :start "
+        "GROUP BY year_week ORDER BY year_week"
+    ), {"sid": sid, "start": start.isoformat()}).fetchall()
 
     return [
         BehaviorTrendPoint(
-            week=r.week, avg_stress=round(r.avg_stress, 2),
-            avg_sleep=round(r.avg_sleep, 2), avg_study=round(r.avg_study, 2),
-            avg_social=round(r.avg_social, 2), avg_activity=round(r.avg_activity, 2),
+            week=r[0], avg_stress=float(r[1]),
+            avg_sleep=float(r[2]), avg_study=float(r[3]),
+            avg_social=float(r[4]), avg_activity=float(r[5]),
         ) for r in rows
     ]
 
@@ -164,17 +164,16 @@ def get_dashboard(user: dict = Depends(require_role("student"))):
         WeeklyAssessment.student_id == sid
     ).order_by(WeeklyAssessment.submit_date.desc()).first()
 
-    # Weekly trend
+    # Weekly trend — GROUP BY 预计算的 year_week
+    from sqlalchemy import text
     end = date.today()
     start = end - timedelta(weeks=12)
-    trend_rows = db.query(
-        week_label(BehaviorLog.record_date),
-        func.avg(BehaviorLog.stress_level).label("avg_stress"),
-        func.avg(BehaviorLog.sleep_duration).label("avg_sleep"),
-    ).filter(
-        BehaviorLog.student_id == sid,
-        BehaviorLog.record_date >= start.isoformat(),
-    ).group_by("week").order_by("week").all()
+    trend_rows = db.execute(text(
+        "SELECT year_week, ROUND(AVG(stress_level), 2), ROUND(AVG(sleep_duration), 2) "
+        "FROM behavior_log "
+        "WHERE student_id = :sid AND record_date >= :start "
+        "GROUP BY year_week ORDER BY year_week"
+    ), {"sid": sid, "start": start.isoformat()}).fetchall()
 
     return {
         "profile": StudentInfoOut.model_validate(profile) if profile else None,
@@ -206,7 +205,7 @@ def get_dashboard(user: dict = Depends(require_role("student"))):
             counselor_reply=latest_weekly.counselor_reply,
         ) if latest_weekly else None,
         "trend": [
-            {"week": r.week, "avg_stress": round(r.avg_stress, 2), "avg_sleep": round(r.avg_sleep, 2)}
+            {"week": r[0], "avg_stress": float(r[1]), "avg_sleep": float(r[2])}
             for r in trend_rows
         ],
     }
