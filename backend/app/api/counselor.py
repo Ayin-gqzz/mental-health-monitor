@@ -20,6 +20,8 @@ router = APIRouter(dependencies=[Depends(require_role("counselor"))])
 
 # ── Student listing ──────────────────────────────────────────
 
+_students_cache = {}
+
 @router.get("/students", response_model=PaginatedResponse)
 def list_students(
     page: int = Query(1, ge=1),
@@ -30,6 +32,13 @@ def list_students(
     risk_level: str = "",
     user: dict = Depends(require_role("counselor")),
 ):
+    import time as _time
+    # 只缓存第一页无筛选的请求
+    cache_key = f"{page}_{search}_{department}_{gender}_{risk_level}"
+    if not search and not department and not gender and not risk_level and cache_key in _students_cache:
+        if _time.time() - _students_cache[cache_key]["time"] < 300:
+            return _students_cache[cache_key]["data"]
+
     db = user["db"]
 
     q = db.query(
@@ -50,19 +59,17 @@ def list_students(
     total = q.count()
     rows = q.order_by(StudentInfo.student_id).offset((page - 1) * page_size).limit(page_size).all()
 
-    # Get risk levels for the current page
+    # 用简单子查询查风险等级（避免视图和窗口函数）
     student_ids = [r[0] for r in rows]
     risk_map = {}
     if student_ids:
-        sub = db.query(
-            MentalAssessment.student_id,
-            MentalAssessment.risk_level,
-            func.row_number().over(
-                partition_by=MentalAssessment.student_id,
-                order_by=MentalAssessment.assessment_date.desc(),
-            ).label("rn"),
-        ).filter(MentalAssessment.student_id.in_(student_ids)).subquery()
-        risk_rows = db.query(sub.c.student_id, sub.c.risk_level).filter(sub.c.rn == 1).all()
+        placeholders = ",".join([f"'{sid}'" for sid in student_ids])
+        risk_rows = db.execute(text(
+            f"SELECT ma.student_id, ma.risk_level FROM mental_assessment ma "
+            f"INNER JOIN (SELECT student_id, MAX(assessment_date) AS max_d FROM mental_assessment "
+            f"WHERE student_id IN ({placeholders}) GROUP BY student_id) latest "
+            f"ON ma.student_id = latest.student_id AND ma.assessment_date = latest.max_d"
+        )).fetchall()
         risk_map = {r[0]: r[1] for r in risk_rows}
 
     items = []
@@ -78,10 +85,13 @@ def list_students(
             "risk_level": risk_map.get(sid),
         })
 
-    return PaginatedResponse(
+    result = PaginatedResponse(
         items=items, total=total, page=page, page_size=page_size,
         total_pages=max(1, math.ceil(total / page_size)),
     )
+    if not search and not department and not gender and not risk_level:
+        _students_cache[cache_key] = {"data": result, "time": _time.time()}
+    return result
 
 
 # ── Student detail ───────────────────────────────────────────

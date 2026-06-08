@@ -94,6 +94,14 @@ export interface NotificationItem {
 }
 
 export async function getStudents(params: Record<string, any> = {}) {
+  // 只缓存第一页无筛选的请求
+  const key = JSON.stringify(params);
+  if (params.page === 1 && !params.search && !params.department && !params.risk_level) {
+    return cached(`students_${key}`, async () => {
+      const res = await client.get("/counselor/students", { params });
+      return res.data as PaginatedResponse<StudentListItem>;
+    });
+  }
   const res = await client.get("/counselor/students", { params });
   return res.data as PaginatedResponse<StudentListItem>;
 }
