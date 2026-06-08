@@ -143,8 +143,10 @@ export async function getDepartmentStats() {
 }
 
 export async function getTrends(department = "") {
-  const res = await client.get("/counselor/statistics/trends", { params: { department } });
-  return res.data;
+  return cached(`trends_${department}`, async () => {
+    const res = await client.get("/counselor/statistics/trends", { params: { department } });
+    return res.data;
+  });
 }
 
 export async function getAlerts(page = 1, pageSize = 20, department = "", isRead = "") {

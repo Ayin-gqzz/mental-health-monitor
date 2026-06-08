@@ -403,11 +403,18 @@ def get_department_stats(user: dict = Depends(require_role("counselor"))):
     return sorted(results, key=lambda x: x.high_risk_count, reverse=True)
 
 
+_trends_cache = {}
+
 @router.get("/statistics/trends", response_model=list[TrendPoint])
 def get_trends(
     department: str = "",
     user: dict = Depends(require_role("counselor")),
 ):
+    import time as _time
+    cache_key = f"trends_{department}"
+    if cache_key in _trends_cache and _time.time() - _trends_cache[cache_key]["time"] < 120:
+        return _trends_cache[cache_key]["data"]
+
     db = user["db"]
     end = date.today()
     start = end - timedelta(weeks=12)
@@ -438,11 +445,13 @@ def get_trends(
     depression_rows = depression_sub.group_by("week").all()
     dep_map = {r.week: r.cnt for r in depression_rows}
 
-    return [
+    result = [
         TrendPoint(week=r.week, avg_stress=round(r.avg_stress, 2),
                    depression_count=dep_map.get(r.week, 0))
         for r in rows
     ]
+    _trends_cache[cache_key] = {"data": result, "time": _time.time()}
+    return result
 
 
 # ── Alerts & Notifications ────────────────────────────────────
