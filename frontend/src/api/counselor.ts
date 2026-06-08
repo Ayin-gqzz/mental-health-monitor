@@ -3,7 +3,7 @@ import type { PaginatedResponse } from "./student";
 
 // 前端缓存：避免重复请求
 const _cache = new Map<string, { data: any; time: number }>();
-function cached(key: string, fetcher: () => Promise<any>, ttl = 60000): Promise<any> {
+function cached(key: string, fetcher: () => Promise<any>, ttl = 300000): Promise<any> {
   const hit = _cache.get(key);
   if (hit && Date.now() - hit.time < ttl) return Promise.resolve(hit.data);
   return fetcher().then((data) => { _cache.set(key, { data, time: Date.now() }); return data; });

@@ -310,7 +310,7 @@ _overview_cache = {"data": None, "timestamp": 0}
 @router.get("/statistics/overview", response_model=OverviewStats)
 def get_overview(user: dict = Depends(require_role("counselor"))):
     import time as _time
-    if _overview_cache["data"] and _time.time() - _overview_cache["timestamp"] < 60:
+    if _overview_cache["data"] and _time.time() - _overview_cache["timestamp"] < 600:
         return _overview_cache["data"]
 
     db = user["db"]
@@ -412,7 +412,7 @@ def get_trends(
 ):
     import time as _time
     cache_key = f"trends_{department}"
-    if cache_key in _trends_cache and _time.time() - _trends_cache[cache_key]["time"] < 120:
+    if cache_key in _trends_cache and _time.time() - _trends_cache[cache_key]["time"] < 600:
         return _trends_cache[cache_key]["data"]
 
     db = user["db"]
@@ -746,8 +746,8 @@ _cluster_cache = {"data": None, "timestamp": 0}
 def get_cluster_analysis(user: dict = Depends(require_role("counselor"))):
     """学生群体聚类画像 — K-Means + PCA 降维（带缓存）"""
     import time as _time
-    # 缓存 5 分钟
-    if _cluster_cache["data"] and _time.time() - _cluster_cache["timestamp"] < 300:
+    # 缓存 10 分钟
+    if _cluster_cache["data"] and _time.time() - _cluster_cache["timestamp"] < 600:
         return _cluster_cache["data"]
 
     import numpy as np
