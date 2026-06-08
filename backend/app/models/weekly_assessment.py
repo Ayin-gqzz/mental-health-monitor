@@ -1,5 +1,5 @@
 from sqlalchemy import Column, String, Integer, Float, Date, DateTime, Text, ForeignKey, func, text
-from app.core.database import Base
+from app.core.database import Base, today_expr
 
 
 class WeeklyAssessment(Base):
@@ -8,7 +8,7 @@ class WeeklyAssessment(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     student_id = Column(String(20), ForeignKey("student_info.student_id", ondelete="CASCADE"), nullable=False)
-    submit_date = Column(Date, nullable=False, server_default=text("(date('now'))"))
+    submit_date = Column(Date, nullable=False, server_default=today_expr())
 
     # 心理测评量表 (1-5 分，1=非常不好，5=非常好)
     mood_score = Column(Integer, nullable=False)           # 情绪状态

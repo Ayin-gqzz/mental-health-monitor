@@ -1,5 +1,5 @@
 from sqlalchemy import Column, String, Integer, Float, Date, DateTime, ForeignKey, func, text
-from app.core.database import Base
+from app.core.database import Base, today_expr
 
 
 class BehaviorLog(Base):
@@ -7,7 +7,7 @@ class BehaviorLog(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     student_id = Column(String(20), ForeignKey("student_info.student_id", ondelete="CASCADE"), nullable=False)
-    record_date = Column(Date, nullable=False, server_default=text("(date('now'))"))
+    record_date = Column(Date, nullable=False, server_default=today_expr())
     sleep_duration = Column(Float, nullable=False)
     study_hours = Column(Float, nullable=False)
     social_media_hours = Column(Float, nullable=False)

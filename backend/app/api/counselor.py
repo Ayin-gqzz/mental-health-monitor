@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, text
 
 from app.core.security import require_role
+from app.core.database import week_label
 from app.models.student import StudentInfo
 from app.models.behavior import BehaviorLog
 from app.models.assessment import MentalAssessment
@@ -402,7 +403,7 @@ def get_trends(
     start = end - timedelta(weeks=12)
 
     base = db.query(
-        func.strftime("%Y-W%W", BehaviorLog.record_date).label("week"),
+        week_label(BehaviorLog.record_date),
         func.avg(BehaviorLog.stress_level).label("avg_stress"),
     ).filter(BehaviorLog.record_date >= start.isoformat())
 
@@ -414,7 +415,7 @@ def get_trends(
     rows = base.group_by("week").order_by("week").all()
 
     depression_sub = db.query(
-        func.strftime("%Y-W%W", MentalAssessment.assessment_date).label("week"),
+        week_label(MentalAssessment.assessment_date),
         func.count(MentalAssessment.id).label("cnt"),
     ).filter(
         MentalAssessment.assessment_date >= start.isoformat(),

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func
 
 from app.core.security import require_role
+from app.core.database import week_label
 from app.models.student import StudentInfo
 from app.models.behavior import BehaviorLog
 from app.models.assessment import MentalAssessment
@@ -92,7 +93,7 @@ def get_behavior_trend(user: dict = Depends(require_role("student"))):
     end = date.today()
     start = end - timedelta(weeks=12)
     rows = db.query(
-        func.strftime("%Y-W%W", BehaviorLog.record_date).label("week"),
+        week_label(BehaviorLog.record_date),
         func.avg(BehaviorLog.stress_level).label("avg_stress"),
         func.avg(BehaviorLog.sleep_duration).label("avg_sleep"),
         func.avg(BehaviorLog.study_hours).label("avg_study"),
@@ -167,7 +168,7 @@ def get_dashboard(user: dict = Depends(require_role("student"))):
     end = date.today()
     start = end - timedelta(weeks=12)
     trend_rows = db.query(
-        func.strftime("%Y-W%W", BehaviorLog.record_date).label("week"),
+        week_label(BehaviorLog.record_date),
         func.avg(BehaviorLog.stress_level).label("avg_stress"),
         func.avg(BehaviorLog.sleep_duration).label("avg_sleep"),
     ).filter(
