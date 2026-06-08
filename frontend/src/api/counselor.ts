@@ -1,6 +1,14 @@
 import client from "./client";
 import type { PaginatedResponse } from "./student";
 
+// 前端缓存：避免重复请求
+const _cache = new Map<string, { data: any; time: number }>();
+function cached(key: string, fetcher: () => Promise<any>, ttl = 60000): Promise<any> {
+  const hit = _cache.get(key);
+  if (hit && Date.now() - hit.time < ttl) return Promise.resolve(hit.data);
+  return fetcher().then((data) => { _cache.set(key, { data, time: Date.now() }); return data; });
+}
+
 export interface StudentListItem {
   student_id: string;
   name: string;
@@ -121,13 +129,17 @@ export async function updateNotes(studentId: string, counselorNotes: string) {
 }
 
 export async function getOverviewStats() {
-  const res = await client.get("/counselor/statistics/overview");
-  return res.data as OverviewStats;
+  return cached("overview", async () => {
+    const res = await client.get("/counselor/statistics/overview");
+    return res.data as OverviewStats;
+  });
 }
 
 export async function getDepartmentStats() {
-  const res = await client.get("/counselor/statistics/departments");
-  return res.data as DepartmentStats[];
+  return cached("departments", async () => {
+    const res = await client.get("/counselor/statistics/departments");
+    return res.data as DepartmentStats[];
+  });
 }
 
 export async function getTrends(department = "") {
@@ -136,6 +148,13 @@ export async function getTrends(department = "") {
 }
 
 export async function getAlerts(page = 1, pageSize = 20, department = "", isRead = "") {
+  // 列表数据不缓存，但预警数量缓存
+  if (page === 1 && !department && !isRead) {
+    return cached("alerts_p1", async () => {
+      const res = await client.get("/counselor/alerts", { params: { page, page_size: pageSize } });
+      return res.data as PaginatedResponse<NotificationItem>;
+    }, 30000);
+  }
   const params: Record<string, any> = { page, page_size: pageSize };
   if (department) params.department = department;
   if (isRead) params.is_read = isRead;
@@ -179,8 +198,10 @@ export async function getStatCorrelation() {
 }
 
 export async function getStressDistribution() {
-  const res = await client.get("/counselor/statistics/stress-distribution");
-  return res.data as { stress_level: number; count: number }[];
+  return cached("stress_dist", async () => {
+    const res = await client.get("/counselor/statistics/stress-distribution");
+    return res.data as { stress_level: number; count: number }[];
+  });
 }
 
 export async function getModelEvaluation() {
