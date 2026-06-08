@@ -31,6 +31,7 @@ export default function WeeklyAssessmentPage() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState("");
+  const [apiError, setApiError] = useState(false);
 
   const [form, setForm] = useState<FormData>({
     mood_score: 3,
@@ -42,16 +43,27 @@ export default function WeeklyAssessmentPage() {
   });
 
   useEffect(() => {
-    Promise.all([canSubmitWeekly(), getWeeklyAssessmentLatest()])
-      .then(([canResult, latestResult]) => {
+    // 分别调用两个 API，这样即使一个失败另一个也能工作
+    canSubmitWeekly()
+      .then((canResult) => {
         setSubmitted(canResult.submitted);
+      })
+      .catch(() => {
+        // API 失败，允许用户提交
+        setSubmitted(false);
+      });
+
+    getWeeklyAssessmentLatest()
+      .then((latestResult) => {
         setLatest(latestResult);
       })
       .catch(() => {
-        // 如果 API 失败（比如表不存在），默认显示提交表单
-        setSubmitted(false);
+        // API 失败，设置 apiError 标记
+        setApiError(true);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        setLoading(false);
+      });
   }, []);
 
   const handleSubmit = async () => {
@@ -89,6 +101,40 @@ export default function WeeklyAssessmentPage() {
     return (
       <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: 300 }}>
         <div className="spinner-lg spinner" />
+      </div>
+    );
+  }
+
+  // 如果后端表不存在，显示提示
+  if (apiError && !latest) {
+    return (
+      <div style={{ maxWidth: 720, margin: "0 auto" }}>
+        <div className="page-header">
+          <h1>📝 每周心理测评</h1>
+          <p className="subtitle">每周提交一次心理状态自评，帮助您了解自己的心理健康状况</p>
+        </div>
+        <div className="card" style={{ padding: 40, textAlign: "center" }}>
+          <AlertCircle size={48} style={{ color: "var(--warning)", marginBottom: 16 }} />
+          <h2 style={{ marginBottom: 8 }}>后端服务未就绪</h2>
+          <p style={{ color: "var(--text-secondary)", marginBottom: 16 }}>
+            请先重启后端服务以创建必要的数据库表。
+          </p>
+          <div style={{
+            padding: 16, background: "var(--bg-page)", borderRadius: "var(--radius-md)",
+            textAlign: "left", fontFamily: "monospace", fontSize: 13, lineHeight: 1.8,
+          }}>
+            <p style={{ margin: 0, color: "var(--text-muted)" }}># 在终端中执行：</p>
+            <p style={{ margin: 0, color: "var(--primary)" }}>cd backend</p>
+            <p style={{ margin: 0, color: "var(--primary)" }}>uvicorn app.main:app --host 127.0.0.1 --port 8000</p>
+          </div>
+          <button
+            className="btn btn-primary"
+            style={{ marginTop: 20 }}
+            onClick={() => window.location.reload()}
+          >
+            刷新页面
+          </button>
+        </div>
       </div>
     );
   }
