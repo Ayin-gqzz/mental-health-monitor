@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { getDashboard, type DashboardData } from "../../api/student";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { AlertTriangle, Moon, Activity, Brain, ClipboardCheck, Smile } from "lucide-react";
+import { AlertTriangle, Moon, Activity, Brain, ClipboardCheck } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 const RISK_LABELS: Record<string, string> = { high: "高", medium: "中", low: "低" };
@@ -128,73 +128,27 @@ export default function StudentDashboard() {
 
       {/* Weekly Assessment Card */}
       <div className="chart-card" style={{ marginBottom: 24 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h3 style={{ display: "flex", alignItems: "center", gap: 8, margin: 0 }}>
             <ClipboardCheck size={18} style={{ color: "var(--primary)" }} />
             每周心理测评
+            {w && <span style={{ fontSize: 12, fontWeight: 400, color: "var(--text-muted)" }}>上次：{w.submit_date}</span>}
           </h3>
-          <button
-            className="btn btn-primary btn-sm"
-            onClick={() => navigate("/student/weekly-assessment")}
-          >
+          <button className="btn btn-primary btn-sm" onClick={() => navigate("/student/weekly-assessment")}>
             {w ? "查看详情" : "去测评"}
           </button>
         </div>
-
-        {w ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
-            <div style={{
-              width: 80, height: 80, borderRadius: "50%",
-              background: `conic-gradient(${SCORE_COLORS[Math.round(w.overall_score)]} ${w.overall_score / 5 * 360}deg, var(--border-light) 0)`,
-              display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
-            }}>
-              <div style={{
-                background: "#fff", width: 64, height: 64, borderRadius: "50%",
-                display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column",
-              }}>
-                <span style={{ fontSize: 20, fontWeight: 700, color: SCORE_COLORS[Math.round(w.overall_score)] }}>
-                  {w.overall_score.toFixed(1)}
-                </span>
-                <span style={{ fontSize: 9, color: "var(--text-muted)" }}>/5</span>
-              </div>
-            </div>
-
-            <div style={{ flex: 1 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 6 }}>
-                {[
-                  { label: "情绪", score: w.mood_score },
-                  { label: "睡眠", score: w.sleep_quality },
-                  { label: "学习", score: w.study_state },
-                  { label: "社交", score: w.social_state },
-                  { label: "满意度", score: w.life_satisfaction },
-                ].map(({ label, score }) => (
-                  <div key={label} style={{ textAlign: "center" }}>
-                    <p style={{ fontSize: 10, color: "var(--text-muted)", margin: 0 }}>{label}</p>
-                    <p style={{ fontSize: 14, fontWeight: 700, color: SCORE_COLORS[score], margin: "2px 0 0" }}>{score}</p>
-                  </div>
-                ))}
-              </div>
-              <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 8 }}>
-                上次提交：{w.submit_date}
-              </p>
-            </div>
-
-            {w.counselor_reply && (
-              <div style={{
-                padding: 10, background: "var(--primary-light)", borderRadius: "var(--radius-md)",
-                fontSize: 12, color: "var(--primary)", maxWidth: 200,
-              }}>
-                <p style={{ fontWeight: 600, margin: "0 0 4px 0", fontSize: 11 }}>👨‍🏫 辅导员已回复</p>
-                <p style={{ margin: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                  {w.counselor_reply}
-                </p>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div style={{ textAlign: "center", padding: 20, color: "var(--text-muted)" }}>
-            <Smile size={32} style={{ opacity: 0.4, marginBottom: 8 }} />
-            <p style={{ margin: 0 }}>本周还未进行心理测评，点击上方按钮开始</p>
+        {w && (
+          <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
+            {["情绪", "睡眠", "学习", "社交", "满意度"].map((label, i) => {
+              const score = [w.mood_score, w.sleep_quality, w.study_state, w.social_state, w.life_satisfaction][i];
+              return (
+                <div key={label} style={{ flex: 1, textAlign: "center", padding: "8px 0", background: "var(--bg-page)", borderRadius: 8 }}>
+                  <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0 }}>{label}</p>
+                  <p style={{ fontSize: 18, fontWeight: 700, color: SCORE_COLORS[score], margin: "4px 0 0" }}>{score}</p>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
