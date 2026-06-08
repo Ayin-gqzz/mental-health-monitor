@@ -775,9 +775,23 @@ def get_cluster_analysis(user: dict = Depends(require_role("counselor"))):
     # 聚类中心（原始尺度）
     centers_original = scaler.inverse_transform(kmeans.cluster_centers_)
 
+    # 一次性查询所有学生的最新风险等级（避免 IN 子句变量过多）
+    risk_sub = db.query(
+        MentalAssessment.student_id, MentalAssessment.risk_level,
+        func.row_number().over(
+            partition_by=MentalAssessment.student_id,
+            order_by=MentalAssessment.assessment_date.desc(),
+        ).label("rn"),
+    ).subquery()
+    all_risk_rows = db.query(risk_sub.c.student_id, risk_sub.c.risk_level).filter(risk_sub.c.rn == 1).all()
+    risk_map = {r.student_id: (r.risk_level or "none") for r in all_risk_rows}
+
+    # 一次性查询所有学生性别
+    all_gender_rows = db.query(StudentInfo.student_id, StudentInfo.gender).all()
+    gender_map = {r.student_id: r.gender for r in all_gender_rows}
+
     # 每个聚类的统计
     clusters = []
-    cluster_names = ["🟢 健康均衡型", "🔵 学业专注型", "🟡 社交活跃型", "🔴 高压风险型"]
 
     for i in range(4):
         mask = labels == i
@@ -785,22 +799,16 @@ def get_cluster_analysis(user: dict = Depends(require_role("counselor"))):
         center = centers_original[i]
         count = int(mask.sum())
 
-        # 获取该聚类学生的评估风险分布
-        cluster_student_ids = [student_ids[j] for j in cluster_indices]
+        # 用 Python 计算风险分布（避免 SQL IN 子句）
+        cluster_sids = set(student_ids[j] for j in cluster_indices)
         risk_counts = {"high": 0, "medium": 0, "low": 0, "none": 0}
-        if cluster_student_ids:
-            # 查询每个学生的最新风险等级
-            assess_sub = db.query(
-                MentalAssessment.student_id, MentalAssessment.risk_level,
-                func.row_number().over(
-                    partition_by=MentalAssessment.student_id,
-                    order_by=MentalAssessment.assessment_date.desc(),
-                ).label("rn"),
-            ).filter(MentalAssessment.student_id.in_(cluster_student_ids)).subquery()
+        for sid in cluster_sids:
+            risk = risk_map.get(sid, "none")
+            risk_counts[risk] = risk_counts.get(risk, 0) + 1
 
-            risk_rows = db.query(assess_sub.c.risk_level).filter(assess_sub.c.rn == 1).all()
-            for rr in risk_rows:
-                risk_counts[rr.risk_level or "none"] += 1
+        # 用 Python 计算性别分布
+        males = sum(1 for s in cluster_sids if gender_map.get(s) == "Male")
+        females = sum(1 for s in cluster_sids if gender_map.get(s) == "Female")
 
         # 根据聚类中心特征自动命名
         stress = center[0]
@@ -831,13 +839,17 @@ def get_cluster_analysis(user: dict = Depends(require_role("counselor"))):
                 "physical_activity": round(float(activity), 2),
             },
             "risk_distribution": risk_counts,
+            "gender_ratio": {"male": males, "female": females},
         })
 
-    # PCA 散点图数据
+    # PCA 散点图数据（限制最多 2000 个点避免前端卡顿）
+    max_points = min(2000, len(student_ids))
+    step = max(1, len(student_ids) // max_points)
     scatter = []
-    for i, sid in enumerate(student_ids):
+    for idx in range(0, len(student_ids), step):
+        i = idx
         scatter.append({
-            "student_id": sid,
+            "student_id": student_ids[i],
             "x": round(float(X_2d[i, 0]), 4),
             "y": round(float(X_2d[i, 1]), 4),
             "cluster": int(labels[i]),
@@ -851,20 +863,6 @@ def get_cluster_analysis(user: dict = Depends(require_role("counselor"))):
         "social_media_hours": round(float(np.mean(X[:, 3])), 2),
         "physical_activity": round(float(np.mean(X[:, 4])), 2),
     }
-
-    # 性别分布
-    gender_sub = db.query(StudentInfo.student_id, StudentInfo.gender).filter(
-        StudentInfo.student_id.in_(student_ids)
-    ).all()
-    gender_map = {r.student_id: r.gender for r in gender_sub}
-
-    for i in range(4):
-        mask = labels == i
-        cluster_indices = np.where(mask)[0]
-        cluster_sids = [student_ids[j] for j in cluster_indices]
-        males = sum(1 for s in cluster_sids if gender_map.get(s) == "Male")
-        females = sum(1 for s in cluster_sids if gender_map.get(s) == "Female")
-        clusters[i]["gender_ratio"] = {"male": males, "female": females}
 
     return {
         "clusters": clusters,
