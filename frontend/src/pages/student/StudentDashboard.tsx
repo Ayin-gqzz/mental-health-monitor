@@ -121,7 +121,7 @@ export default function StudentDashboard() {
               </p>
             </>
           ) : (
-            <p style={{ color: "var(--text-muted)" }}>暂无评估，请联系辅导员进行评估</p>
+            <p style={{ color: "var(--text-muted)" }}>暂无评估，请联系管理员进行评估</p>
           )}
         </div>
       </div>

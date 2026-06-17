@@ -16,8 +16,7 @@ from sklearn.metrics import (
     roc_auc_score, confusion_matrix, classification_report,
     roc_curve, precision_recall_curve, average_precision_score,
 )
-from sklearn.model_selection import learning_curve
-from imblearn.over_sampling import SMOTE
+from sklearn.model_selection import learning_curve, StratifiedKFold
 import joblib
 
 ML_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -36,23 +35,12 @@ def find_csv():
 CSV_PATH = find_csv()
 
 
-def main():
-    print("=" * 60)
-    print("Mental Health Depression Prediction — Model Training")
-    print("=" * 60)
-
-    # 1. Load data
-    print("\n[1/6] Loading data...")
-    df = pd.read_csv(CSV_PATH)
-    print(f"  Loaded {len(df)} rows, {len(df.columns)} columns")
-
-    # 2. Feature engineering
-    print("\n[2/6] Feature engineering...")
+def _engineer_features(df, median_stress):
+    """Apply feature engineering to a DataFrame (no side effects on original)."""
+    df = df.copy()
     df["Gender_Enc"] = df["Gender"].map({"Male": 0, "Female": 1})
     df_encoded = pd.get_dummies(df, columns=["Department"], prefix="dept")
 
-    # Engineered features
-    median_stress = df_encoded["Stress_Level"].median()
     df_encoded["Stress_Change_Rate"] = (df_encoded["Stress_Level"] - median_stress) / median_stress
     df_encoded["Sleep_Quality_Index"] = df_encoded["Sleep_Duration"] * (1 - df_encoded["Stress_Level"] / 10)
     df_encoded["Lifestyle_Score"] = (
@@ -70,90 +58,129 @@ def main():
         "Stress_Change_Rate", "Sleep_Quality_Index", "Lifestyle_Score",
     ]
 
-    X = df_encoded[feature_cols].copy()
-    y = df_encoded["Depression"].map({True: 1, False: 0}).values
+    # 确保所有独热列都存在（防止某学院在测试集缺失）
+    for col in feature_cols:
+        if col not in df_encoded.columns:
+            df_encoded[col] = 0
 
-    numeric_cols = ["Age", "CGPA", "Sleep_Duration", "Study_Hours",
-                    "Social_Media_Hours", "Physical_Activity", "Stress_Level",
-                    "Stress_Change_Rate", "Sleep_Quality_Index", "Lifestyle_Score"]
+    return df_encoded, feature_cols
 
-    print(f"  Features: {len(feature_cols)}, Positive samples: {y.sum()} ({y.sum()/len(y)*100:.1f}%)")
 
-    # 3. Train/test split
-    print("\n[3/6] Train/test split (80/20, stratified)...")
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, stratify=y, random_state=42,
+NUMERIC_COLS = [
+    "Age", "CGPA", "Sleep_Duration", "Study_Hours",
+    "Social_Media_Hours", "Physical_Activity", "Stress_Level",
+    "Stress_Change_Rate", "Sleep_Quality_Index", "Lifestyle_Score",
+]
+
+
+def main():
+    print("=" * 60)
+    print("Mental Health Depression Prediction — Model Training")
+    print("=" * 60)
+
+    # 1. Load data
+    print("\n[1/7] Loading data...")
+    df = pd.read_csv(CSV_PATH)
+    print(f"  Loaded {len(df)} rows, {len(df.columns)} columns")
+
+    # 2. Train/test split FIRST — 避免数据泄露到特征工程
+    print("\n[2/7] Train/test split (80/20, stratified)...")
+    train_df, test_df = train_test_split(
+        df, test_size=0.2, stratify=df["Depression"], random_state=42,
     )
-    print(f"  Train: {len(X_train)}, Test: {len(X_test)}")
+    y_train = train_df["Depression"].map({True: 1, False: 0}).values
+    y_test = test_df["Depression"].map({True: 1, False: 0}).values
+    print(f"  Train: {len(train_df)}, Test: {len(test_df)}")
 
-    # 4. Scale numeric features
-    print("\n[4/6] Scaling numeric features...")
+    # 3. Feature engineering — median_stress 只用训练集计算，杜绝泄露
+    print("\n[3/7] Feature engineering (fit on train only)...")
+    median_stress = train_df["Stress_Level"].median()
+    print(f"  Train median stress: {median_stress}")
+
+    X_train, feature_cols = _engineer_features(train_df, median_stress)
+    X_test, _ = _engineer_features(test_df, median_stress)
+
+    X_train = X_train[feature_cols].copy()
+    X_test = X_test[feature_cols].copy()
+
+    print(f"  Features: {len(feature_cols)}, Positive: {y_train.sum()} ({y_train.sum()/len(y_train)*100:.1f}%)")
+
+    # 4. Scale numeric features (fit on train, apply to test)
+    print("\n[4/7] Scaling numeric features...")
     scaler = StandardScaler()
     X_train_scaled = X_train.copy()
     X_test_scaled = X_test.copy()
-    X_train_scaled[numeric_cols] = scaler.fit_transform(X_train[numeric_cols])
-    X_test_scaled[numeric_cols] = scaler.transform(X_test[numeric_cols])
+    X_train_scaled[NUMERIC_COLS] = scaler.fit_transform(X_train[NUMERIC_COLS])
+    X_test_scaled[NUMERIC_COLS] = scaler.transform(X_test[NUMERIC_COLS])
 
-    # 5. Handle class imbalance with SMOTE
-    print("\n[5/6] Applying SMOTE + training Random Forest...")
-    smote = SMOTE(random_state=42)
-    X_train_resampled, y_train_resampled = smote.fit_resample(X_train_scaled, y_train)
-    print(f"  After SMOTE: {len(X_train_resampled)} samples ({y_train_resampled.sum()} positive)")
-
-    # Train Random Forest with GridSearch
+    # 5. 用 class_weight="balanced" 处理不平衡（不用 SMOTE，避免合成样本噪声）
+    print("\n[5/7] Training Random Forest with class_weight='balanced'...")
     param_grid = {
-        "n_estimators": [100, 200],
-        "max_depth": [10, 15, None],
-        "min_samples_split": [2, 5],
-        "min_samples_leaf": [1, 2],
+        "n_estimators": [100, 200, 300],
+        "max_depth": [10, 15, 20, None],
+        "min_samples_split": [2, 5, 10],
+        "min_samples_leaf": [1, 2, 4],
     }
 
-    rf = RandomForestClassifier(random_state=42, class_weight="balanced", n_jobs=-1)
-    grid = GridSearchCV(rf, param_grid, cv=3, scoring="f1", n_jobs=-1, verbose=1)
-    grid.fit(X_train_resampled, y_train_resampled)
+    rf = RandomForestClassifier(random_state=42, class_weight="balanced_subsample", n_jobs=-1)
+    grid = GridSearchCV(rf, param_grid, cv=StratifiedKFold(3, shuffle=True, random_state=42),
+                        scoring="roc_auc", n_jobs=-1, verbose=1)
+    grid.fit(X_train_scaled, y_train)
+    print(f"  Positive ratio: {y_train.sum()}/{len(y_train)} ({y_train.sum()/len(y_train)*100:.1f}%)")
 
     print(f"  Best params: {grid.best_params_}")
     print(f"  Best CV F1: {grid.best_score_:.4f}")
 
-    # 6. Evaluate
-    print("\n[6/6] Evaluation on test set...")
+    # 6. Evaluate on test set
+    print("\n[6/7] Evaluation on test set...")
     model = grid.best_estimator_
     y_pred = model.predict(X_test_scaled)
     y_proba = model.predict_proba(X_test_scaled)[:, 1]
 
+    # 默认阈值 0.5 的指标
     acc = accuracy_score(y_test, y_pred)
     prec = precision_score(y_test, y_pred)
     rec = recall_score(y_test, y_pred)
     f1 = f1_score(y_test, y_pred)
     auc = roc_auc_score(y_test, y_proba)
 
+    # 找到最优阈值（Youden's J statistic: max TPR - FPR）
+    fpr, tpr, roc_thresholds = roc_curve(y_test, y_proba)
+    youden_idx = np.argmax(tpr - fpr)
+    optimal_threshold = roc_thresholds[youden_idx]
+    y_pred_opt = (y_proba >= optimal_threshold).astype(int)
+
+    print(f"  ROC-AUC: {auc:.4f}")
+    print(f"  最优阈值 (Youden): {optimal_threshold:.4f}")
+    print(f"\n  ── 默认阈值 0.5 ──")
     print(f"  Accuracy:  {acc:.4f}")
     print(f"  Precision: {prec:.4f}")
     print(f"  Recall:    {rec:.4f}")
     print(f"  F1 Score:  {f1:.4f}")
-    print(f"  ROC-AUC:   {auc:.4f}")
-    print(f"\n  Confusion Matrix:\n{confusion_matrix(y_test, y_pred)}")
-    print(f"\n  Classification Report:\n{classification_report(y_test, y_pred, target_names=['No Depression', 'Depression'])}")
+    print(f"\n  ── 最优阈值 {optimal_threshold:.4f} ──")
+    print(f"  Accuracy:  {accuracy_score(y_test, y_pred_opt):.4f}")
+    print(f"  Precision: {precision_score(y_test, y_pred_opt):.4f}")
+    print(f"  Recall:    {recall_score(y_test, y_pred_opt):.4f}")
+    print(f"  F1 Score:  {f1_score(y_test, y_pred_opt):.4f}")
+    print(f"\n  Confusion Matrix (阈值=0.5):\n{confusion_matrix(y_test, y_pred)}")
+    print(f"  Confusion Matrix (最优阈值):\n{confusion_matrix(y_test, y_pred_opt)}")
+    print(f"\n  Classification Report (阈值=0.5):\n{classification_report(y_test, y_pred, target_names=['No Depression', 'Depression'])}")
 
     # Feature importance
     print("\n  Feature Importance:")
     for name, imp in sorted(zip(feature_cols, model.feature_importances_), key=lambda x: -x[1]):
         print(f"    {name:25s}: {imp:.4f}")
 
-    # Save artifacts
-    model_path = os.path.join(ML_DIR, "model.pkl")
-    scaler_path = os.path.join(ML_DIR, "scaler.pkl")
-    features_path = os.path.join(ML_DIR, "feature_cols.pkl")
-    numeric_path = os.path.join(ML_DIR, "numeric_cols.pkl")
+    # 7. Save artifacts
+    print("\n[7/7] Saving model artifacts...")
+    joblib.dump(model, os.path.join(ML_DIR, "model.pkl"))
+    joblib.dump(scaler, os.path.join(ML_DIR, "scaler.pkl"))
+    joblib.dump(feature_cols, os.path.join(ML_DIR, "feature_cols.pkl"))
+    joblib.dump(NUMERIC_COLS, os.path.join(ML_DIR, "numeric_cols.pkl"))
 
-    joblib.dump(model, model_path)
-    joblib.dump(scaler, scaler_path)
-    joblib.dump(feature_cols, features_path)
-    joblib.dump(numeric_cols, numeric_path)
-
-    # Save feature metadata for prediction-time feature engineering
     feature_metadata = {
         "median_stress": float(median_stress),
+        "optimal_threshold": float(optimal_threshold),
         "lifestyle_weights": {
             "sleep": 0.30, "activity": 0.20, "stress_inv": 0.20,
             "study": 0.15, "social_inv": 0.15,
@@ -161,13 +188,15 @@ def main():
     }
     joblib.dump(feature_metadata, os.path.join(ML_DIR, "feature_metadata.pkl"))
 
-    # Save evaluation curve data
+    # ROC / PR curves（测试集真实评估）
     fpr, tpr, roc_thresholds = roc_curve(y_test, y_proba)
     precision_arr, recall_arr, pr_thresholds = precision_recall_curve(y_test, y_proba)
 
+    # 学习曲线（StratifiedKFold 保证每折正负比例一致）
     train_sizes, train_scores, val_scores = learning_curve(
-        grid.best_estimator_, X_train_scaled, y_train,
-        cv=3, scoring="f1", n_jobs=-1,
+        model, X_train_scaled, y_train,
+        cv=StratifiedKFold(3, shuffle=True, random_state=42),
+        scoring="f1", n_jobs=-1,
         train_sizes=np.linspace(0.1, 1.0, 5),
     )
 

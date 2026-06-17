@@ -3,24 +3,25 @@ import { useNavigate } from "react-router-dom";
 import { getAlerts, markAsRead, markAllAsRead, type NotificationItem } from "../../api/counselor";
 import { ChevronLeft, ChevronRight, CheckCheck } from "lucide-react";
 
-const DEPARTMENTS = ["", "理学", "工学", "医学", "商学", "艺术"];
+const GENDERS = ["", "Male", "Female"];
+const GENDER_LABELS: Record<string, string> = { Male: "男", Female: "女" };
 
 export default function AlertsPage() {
   const [alerts, setAlerts] = useState<NotificationItem[]>([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const [department, setDepartment] = useState("");
+  const [gender, setGender] = useState("");
   const [readFilter, setReadFilter] = useState("");
   const navigate = useNavigate();
 
   const loadAlerts = () => {
-    getAlerts(page, 20, department, readFilter).then((res) => {
+    getAlerts(page, 20, "", gender, readFilter).then((res) => {
       setAlerts(res.items);
       setTotalPages(res.total_pages);
     });
   };
 
-  useEffect(() => { loadAlerts(); }, [page, department, readFilter]);
+  useEffect(() => { loadAlerts(); }, [page, gender, readFilter]);
 
   const handleMarkRead = async (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -47,8 +48,8 @@ export default function AlertsPage() {
 
       {/* Filters */}
       <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
-        <select value={department} onChange={(e) => { setDepartment(e.target.value); setPage(1); }} className="select" style={{ width: 140 }}>
-          {DEPARTMENTS.map((d) => <option key={d} value={d}>{d || "全部院系"}</option>)}
+        <select value={gender} onChange={(e) => { setGender(e.target.value); setPage(1); }} className="select" style={{ width: 140 }}>
+          {GENDERS.map((g) => <option key={g} value={g}>{g ? (GENDER_LABELS[g] || g) : "全部性别"}</option>)}
         </select>
         <select value={readFilter} onChange={(e) => { setReadFilter(e.target.value); setPage(1); }} className="select" style={{ width: 140 }}>
           <option value="">全部状态</option>
@@ -87,7 +88,7 @@ export default function AlertsPage() {
                 <td style={{ fontWeight: 500 }}>{a.student_id}</td>
                 <td>{a.name}</td>
                 <td>{a.department}</td>
-                <td>{a.gender}</td>
+                <td>{GENDER_LABELS[a.gender] || a.gender}</td>
                 <td style={{ color: "var(--danger)", fontWeight: 600 }}>
                   {a.depression_probability ? (a.depression_probability * 100).toFixed(1) + "%" : "—"}
                 </td>

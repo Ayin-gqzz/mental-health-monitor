@@ -21,6 +21,8 @@ export interface TokenResponse {
   role: string;
   display_name: string;
   user_id: string;
+  department?: string;
+  is_admin?: boolean;
 }
 
 export async function login(data: LoginData): Promise<TokenResponse> {

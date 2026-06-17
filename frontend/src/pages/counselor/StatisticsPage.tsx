@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
 import { getDepartmentStats, getTrends, getComplexQuery, getStressDistribution, type DepartmentStats, type ComplexQueryResult } from "../../api/counselor";
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { BarChart, Bar, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { Play } from "lucide-react";
+import { useAuthStore } from "../../stores/authStore";
+
+const BAR_DEFAULT = "#4f6ef7";
+const BAR_HIGHLIGHT = "#f59e0b";
 
 export default function StatisticsPage() {
   const [deptStats, setDeptStats] = useState<DepartmentStats[]>([]);
@@ -9,6 +13,7 @@ export default function StatisticsPage() {
   const [queryResult, setQueryResult] = useState<ComplexQueryResult | null>(null);
   const [queryLoading, setQueryLoading] = useState(false);
   const [stressDist, setStressDist] = useState<any[]>([]);
+  const myDept = useAuthStore((s) => s.department);
 
   useEffect(() => {
     getDepartmentStats().then(setDeptStats);
@@ -40,7 +45,11 @@ export default function StatisticsPage() {
               <XAxis dataKey="department" fontSize={11} stroke="var(--text-muted)" />
               <YAxis fontSize={11} stroke="var(--text-muted)" />
               <Tooltip contentStyle={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", boxShadow: "var(--shadow-md)" }} />
-              <Bar dataKey="depression_rate" fill="#4f6ef7" name="抑郁率 (%)" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="depression_rate" name="抑郁率 (%)" radius={[6, 6, 0, 0]}>
+                {deptStats.map((d) => (
+                  <Cell key={d.department} fill={d.department === myDept ? BAR_HIGHLIGHT : BAR_DEFAULT} />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -91,7 +100,7 @@ export default function StatisticsPage() {
           </thead>
           <tbody>
             {deptStats.map((d) => (
-              <tr key={d.department}>
+              <tr key={d.department} style={{ background: d.department === myDept ? "rgba(245,158,11,0.06)" : undefined }}>
                 <td style={{ fontWeight: 500 }}>{d.department}</td>
                 <td>{d.student_count}</td>
                 <td>{d.avg_stress}</td>

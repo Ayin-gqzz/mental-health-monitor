@@ -5,7 +5,7 @@ import { getUnreadCount } from "../../api/counselor";
 import {
   LayoutDashboard, Activity, ClipboardList, Users, BarChart3, AlertTriangle, LogOut,
   FlaskConical, KeyRound, UserPlus, Brain, ChevronLeft, ChevronRight,
-  ClipboardCheck, History, UserSearch,
+  ClipboardCheck, History, UserSearch, MessageSquare, FileText,
 } from "lucide-react";
 
 const studentLinks = [
@@ -16,27 +16,36 @@ const studentLinks = [
   { path: "/student/weekly-history", label: "测评记录", icon: History },
 ];
 
-const counselorLinks = [
-  { group: "核心功能", items: [
+const adminLinks = [
+  { group: "数据总览", items: [
     { path: "/counselor", label: "工作台", icon: LayoutDashboard },
-    { path: "/counselor/students", label: "学生管理", icon: Users },
-    { path: "/counselor/alerts", label: "预警信息", icon: AlertTriangle, badge: true },
-  ]},
-  { group: "数据分析", items: [
     { path: "/counselor/statistics", label: "统计分析", icon: BarChart3 },
     { path: "/counselor/stat-analysis", label: "统计检验", icon: FlaskConical },
     { path: "/counselor/model-evaluation", label: "群体画像", icon: UserSearch },
   ]},
   { group: "系统管理", items: [
+    { path: "/counselor/register", label: "注册管理员", icon: UserPlus },
     { path: "/counselor/change-password", label: "修改密码", icon: KeyRound },
-    { path: "/counselor/register", label: "注册辅导员", icon: UserPlus },
+  ]},
+];
+
+const counselorBasicLinks = [
+  { group: "学生管理", items: [
+    { path: "/counselor", label: "工作台", icon: LayoutDashboard },
+    { path: "/counselor/students", label: "学生列表", icon: Users },
+    { path: "/counselor/weekly-review", label: "每周测评", icon: MessageSquare },
+    { path: "/counselor/alerts", label: "预警信息", icon: AlertTriangle, badge: true },
+    { path: "/counselor/report", label: "定期上报", icon: FileText },
+  ]},
+  { group: "个人设置", items: [
+    { path: "/counselor/change-password", label: "修改密码", icon: KeyRound },
   ]},
 ];
 
 export function Sidebar() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { role, displayName, logout } = useAuthStore();
+  const { role, displayName, logout, isAdmin } = useAuthStore();
   const [unreadCount, setUnreadCount] = useState(0);
   const [collapsed, setCollapsed] = useState(false);
 
@@ -85,7 +94,7 @@ export function Sidebar() {
           <div style={{ overflow: "hidden" }}>
             <h2 style={{ fontSize: 15, margin: 0, fontWeight: 700, whiteSpace: "nowrap" }}>心理健康监控</h2>
             <p style={{ fontSize: 11, color: "rgba(255,255,255,0.6)", margin: "2px 0 0", whiteSpace: "nowrap" }}>
-              {role === "counselor" ? "辅导员" : "学生"} · {displayName}
+              {role === "counselor" ? (isAdmin ? "管理员" : "辅导员") : "学生"} · {displayName}
             </p>
           </div>
         )}
@@ -94,7 +103,7 @@ export function Sidebar() {
       {/* Navigation */}
       <nav style={{ flex: 1, padding: collapsed ? "12px 0" : "12px 0", overflowY: "auto" }}>
         {role === "counselor" ? (
-          counselorLinks.map((group, gi) => (
+          (isAdmin ? adminLinks : counselorBasicLinks).map((group, gi) => (
             <div key={gi} style={{ marginBottom: 8 }}>
               {!collapsed && (
                 <p className="section-title" style={{ color: "rgba(255,255,255,0.45)", padding: "8px 20px 4px", fontSize: 11 }}>

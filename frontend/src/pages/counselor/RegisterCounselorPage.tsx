@@ -32,7 +32,7 @@ export default function RegisterCounselorPage() {
     setLoading(true);
     try {
       await registerCounselor(username, password, displayName);
-      setSuccess(`辅导员 "${displayName}" 注册成功`);
+      setSuccess(`管理员 "${displayName}" 注册成功`);
       setUsername("");
       setPassword("");
       setConfirmPassword("");
@@ -47,8 +47,8 @@ export default function RegisterCounselorPage() {
   return (
     <div style={{ maxWidth: 480 }}>
       <div className="page-header">
-        <h1>➕ 注册新辅导员</h1>
-        <p className="subtitle">创建新的辅导员账号</p>
+        <h1>➕ 注册新管理员</h1>
+        <p className="subtitle">创建新的管理员账号</p>
       </div>
 
       <form onSubmit={handleSubmit} className="card" style={{ padding: 28 }}>

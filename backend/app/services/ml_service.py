@@ -42,6 +42,8 @@ class MLService:
 
         metadata_path = os.path.join(ML_DIR, "feature_metadata.pkl")
         self.feature_metadata = joblib.load(metadata_path) if os.path.exists(metadata_path) else None
+        # 使用训练时找到的最优阈值，默认 0.5
+        self.optimal_threshold = self.feature_metadata.get("optimal_threshold", 0.5) if self.feature_metadata else 0.5
         self._loaded = True
 
     def predict(self, profile: dict, behavior: dict) -> MentalAssessmentResult:
@@ -87,7 +89,7 @@ class MLService:
         X[self.numeric_cols] = self.scaler.transform(X[self.numeric_cols])
 
         proba = float(self.model.predict_proba(X)[0, 1])
-        predicted = proba >= 0.5
+        predicted = proba >= self.optimal_threshold
 
         # Risk level
         if predicted or behavior["stress_level"] >= 8:

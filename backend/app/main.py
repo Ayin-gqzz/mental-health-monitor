@@ -32,6 +32,16 @@ async def lifespan(app: FastAPI):
                 conn.execute(text(f"UPDATE {table} SET year_week = {wk.format(date_col)}"))
                 print(f"[migrate] Added year_week to {table} and backfilled.")
 
+        # 辅导员权限：给 counselor_user 表加 department 和 is_admin 列
+        if not _col_exists("counselor_user", "department"):
+            conn.execute(text("ALTER TABLE counselor_user ADD COLUMN department VARCHAR(50) NOT NULL DEFAULT ''"))
+            print("[migrate] Added department to counselor_user.")
+        if not _col_exists("counselor_user", "is_admin"):
+            conn.execute(text("ALTER TABLE counselor_user ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT 0"))
+            print("[migrate] Added is_admin to counselor_user.")
+        # 将默认辅导员账号设为 admin
+        conn.execute(text("UPDATE counselor_user SET is_admin = 1 WHERE username = 'counselor'"))
+
         for idx_sql in [
             # 已有的索引
             "CREATE INDEX IF NOT EXISTS idx_assess_student_date_desc ON mental_assessment(student_id, assessment_date DESC)",
@@ -53,6 +63,8 @@ async def lifespan(app: FastAPI):
             # trends 覆盖索引：WHERE record_date >= ? + GROUP BY year_week + AVG(stress_level) 全部走索引
             "CREATE INDEX IF NOT EXISTS idx_trends_cover ON behavior_log(record_date, year_week, stress_level)",
             "CREATE INDEX IF NOT EXISTS idx_assess_trends_cover ON mental_assessment(assessment_date, year_week, depression_predicted)",
+            # student_latest_stats 按院系过滤（统计检验 + 聚类分析）
+            "CREATE INDEX IF NOT EXISTS idx_sls_dept ON student_latest_stats(department)",
         ]:
             try:
                 conn.execute(text(idx_sql))
@@ -144,16 +156,22 @@ async def lifespan(app: FastAPI):
                     WHERE ma.risk_level = 'high'
                 """))
 
-        # 预聚合表：首次启动时刷新（之后 trends 查询直接读这张表，毫秒级）
+        # 预聚合表：首次启动或数据不完整时刷新（之后查询直接读预聚合表，毫秒级）
+        _need_refresh = False
         try:
-            _has = conn.execute(text("SELECT COUNT(*) FROM weekly_behavior_stats")).scalar()
+            _wbs = conn.execute(text("SELECT COUNT(*) FROM weekly_behavior_stats")).scalar()
+            _sls = conn.execute(text("SELECT COUNT(*) FROM student_latest_stats")).scalar()
+            _need_refresh = (_wbs == 0 or _sls == 0)
         except Exception:
-            _has = 0
-        if _has == 0:
-            print("[startup] Refreshing weekly stats (first run, ~30s)...")
-            from scripts.refresh_weekly_stats import refresh_all
-            refresh_all(conn=conn)
-            print("[startup] Weekly stats ready.")
+            _need_refresh = True
+        if _need_refresh:
+            # 确保 behavior_log 和 mental_assessment 有数据才刷新
+            _bl_count = conn.execute(text("SELECT COUNT(*) FROM behavior_log")).scalar()
+            if _bl_count > 0:
+                print("[startup] Refreshing pre-agg tables (first run, ~30s)...")
+                from scripts.refresh_weekly_stats import refresh_all
+                refresh_all(conn=conn)
+                print("[startup] Pre-agg tables ready.")
 
     yield
 

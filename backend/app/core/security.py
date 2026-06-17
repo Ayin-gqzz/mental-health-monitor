@@ -44,7 +44,13 @@ def get_current_user(
     payload = decode_token(creds.credentials)
     if payload is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
-    return {"user_id": payload["sub"], "role": payload["role"], "db": db}
+    return {
+        "user_id": payload["sub"],
+        "role": payload["role"],
+        "department": payload.get("department", ""),
+        "is_admin": payload.get("is_admin", False),
+        "db": db,
+    }
 
 
 def require_role(role: str):

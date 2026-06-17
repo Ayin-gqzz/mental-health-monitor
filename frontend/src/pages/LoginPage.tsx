@@ -2,12 +2,12 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { login, loginCounselor } from "../api/auth";
 import { useAuthStore } from "../stores/authStore";
-import { Brain, User, Lock, AlertCircle, GraduationCap, Briefcase } from "lucide-react";
+import { Brain, User, Lock, AlertCircle, GraduationCap, Briefcase, ShieldCheck } from "lucide-react";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"student" | "counselor">("student");
+  const [role, setRole] = useState<"student" | "counselor" | "admin">("student");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -18,9 +18,19 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
     try {
-      const fn = role === "counselor" ? loginCounselor : login;
+      const fn = role === "student" ? login : loginCounselor;
       const res = await fn({ username, password });
-      setAuth(res.access_token, res.role, res.display_name, res.user_id);
+      if (role === "admin" && !res.is_admin) {
+        setError("该账号不是管理员，请选择正确的身份登录");
+        setLoading(false);
+        return;
+      }
+      if (role === "counselor" && res.is_admin) {
+        setError("该账号是管理员，请选择管理员身份登录");
+        setLoading(false);
+        return;
+      }
+      setAuth(res.access_token, res.role, res.display_name, res.user_id, res.department || "", res.is_admin || false);
       navigate(`/${res.role}`);
     } catch {
       setError("用户名或密码错误");
@@ -93,6 +103,7 @@ export default function LoginPage() {
           {[
             { key: "student" as const, label: "学生", icon: GraduationCap },
             { key: "counselor" as const, label: "辅导员", icon: Briefcase },
+            { key: "admin" as const, label: "管理员", icon: ShieldCheck },
           ].map(({ key, label, icon: Icon }) => (
             <button
               key={key}
@@ -115,7 +126,7 @@ export default function LoginPage() {
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">
-            <label className="form-label">{role === "counselor" ? "用户名" : "学号"}</label>
+            <label className="form-label">{role === "student" ? "学号" : "用户名"}</label>
             <div style={{ position: "relative" }}>
               <User size={16} style={{
                 position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)",
@@ -124,7 +135,7 @@ export default function LoginPage() {
               <input
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder={role === "counselor" ? "请输入用户名" : "请输入学号"}
+                placeholder={role === "student" ? "请输入学号" : "请输入用户名"}
                 className="input"
                 style={{ paddingLeft: 40 }}
               />
@@ -179,7 +190,8 @@ export default function LoginPage() {
         <div style={{ marginTop: 24, padding: "14px 16px", borderRadius: "var(--radius-md)", background: "var(--bg-page)", fontSize: 12, color: "var(--text-muted)", lineHeight: 1.7 }}>
           <p style={{ fontWeight: 600, color: "var(--text-secondary)", marginBottom: 4 }}>演示账号</p>
           <p>学生：学号 <code style={{ background: "var(--primary-light)", color: "var(--primary)", padding: "1px 6px", borderRadius: 4 }}>1001</code> / 密码 <code style={{ background: "var(--primary-light)", color: "var(--primary)", padding: "1px 6px", borderRadius: 4 }}>123456</code></p>
-          <p>辅导员：<code style={{ background: "var(--primary-light)", color: "var(--primary)", padding: "1px 6px", borderRadius: 4 }}>counselor</code> / <code style={{ background: "var(--primary-light)", color: "var(--primary)", padding: "1px 6px", borderRadius: 4 }}>123456</code></p>
+          <p>管理员：<code style={{ background: "var(--primary-light)", color: "var(--primary)", padding: "1px 6px", borderRadius: 4 }}>gaze</code> / <code style={{ background: "var(--primary-light)", color: "var(--primary)", padding: "1px 6px", borderRadius: 4 }}>123</code></p>
+          <p>管理员：<code style={{ background: "var(--primary-light)", color: "var(--primary)", padding: "1px 6px", borderRadius: 4 }}>counselor</code> / <code style={{ background: "var(--primary-light)", color: "var(--primary)", padding: "1px 6px", borderRadius: 4 }}>123456</code></p>
         </div>
 
         <p style={{ textAlign: "center", marginTop: 20, fontSize: 13, color: "var(--text-muted)" }}>

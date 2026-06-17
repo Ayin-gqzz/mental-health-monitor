@@ -122,7 +122,7 @@ export default function StudentDetail() {
           {a && (
             <div style={{ marginTop: 16 }}>
               <textarea
-                placeholder="添加辅导员备注..."
+                placeholder="添加管理员备注..."
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 className="input"

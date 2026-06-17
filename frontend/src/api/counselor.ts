@@ -157,9 +157,9 @@ export async function getTrends(department = "") {
   });
 }
 
-export async function getAlerts(page = 1, pageSize = 20, department = "", isRead = "") {
+export async function getAlerts(page = 1, pageSize = 20, department = "", gender = "", isRead = "") {
   // 列表数据不缓存，但预警数量缓存
-  if (page === 1 && !department && !isRead) {
+  if (page === 1 && !department && !gender && !isRead) {
     return cached("alerts_p1", async () => {
       const res = await client.get("/counselor/alerts", { params: { page, page_size: pageSize } });
       return res.data as PaginatedResponse<NotificationItem>;
@@ -167,6 +167,7 @@ export async function getAlerts(page = 1, pageSize = 20, department = "", isRead
   }
   const params: Record<string, any> = { page, page_size: pageSize };
   if (department) params.department = department;
+  if (gender) params.gender = gender;
   if (isRead) params.is_read = isRead;
   const res = await client.get("/counselor/alerts", { params });
   return res.data as PaginatedResponse<NotificationItem>;
@@ -193,18 +194,24 @@ export async function getComplexQuery() {
 }
 
 export async function getStatTTest() {
-  const res = await client.get("/counselor/statistics/t-test");
-  return res.data as TTestResult[];
+  return cached("stat_ttest", async () => {
+    const res = await client.get("/counselor/statistics/t-test");
+    return res.data as TTestResult[];
+  });
 }
 
 export async function getStatChiSquare() {
-  const res = await client.get("/counselor/statistics/chi-square");
-  return res.data as ChiSquareResult;
+  return cached("stat_chisquare", async () => {
+    const res = await client.get("/counselor/statistics/chi-square");
+    return res.data as ChiSquareResult;
+  });
 }
 
 export async function getStatCorrelation() {
-  const res = await client.get("/counselor/statistics/correlation");
-  return res.data as CorrelationResult[];
+  return cached("stat_correlation", async () => {
+    const res = await client.get("/counselor/statistics/correlation");
+    return res.data as CorrelationResult[];
+  });
 }
 
 export async function getStressDistribution() {
@@ -234,6 +241,8 @@ export interface ClusterData {
     };
     risk_distribution: { high: number; medium: number; low: number; none: number };
     gender_ratio: { male: number; female: number };
+    traits?: string[];
+    suggestions?: string[];
   }[];
   scatter: { student_id: string; x: number; y: number; cluster: number }[];
   global_means: Record<string, number>;
@@ -242,8 +251,10 @@ export interface ClusterData {
 }
 
 export async function getClusterAnalysis() {
-  const res = await client.get("/counselor/cluster-analysis", { timeout: 60000 });
-  return res.data as ClusterData;
+  return cached("cluster_analysis", async () => {
+    const res = await client.get("/counselor/cluster-analysis", { timeout: 60000 });
+    return res.data as ClusterData;
+  }, 600000); // 10 分钟缓存，与后端对齐
 }
 
 export async function registerCounselor(username: string, password: string, displayName: string) {
@@ -258,4 +269,100 @@ export async function changeCounselorPassword(oldPassword: string, newPassword: 
     old_password: oldPassword, new_password: newPassword,
   });
   return res.data;
+}
+
+// ── Counselor Reports ──────────────────────────────────────
+
+export interface CounselorReportItem {
+  id: number;
+  counselor_id: number;
+  department: string;
+  report_week: string;
+  overall_status: string;
+  abnormal_cases: string;
+  key_students: string;
+  created_at: string | null;
+  counselor_name?: string;
+}
+
+export async function getReports(page = 1, pageSize = 20, reportWeek = "") {
+  const params: Record<string, any> = { page, page_size: pageSize };
+  if (reportWeek) params.report_week = reportWeek;
+  const res = await client.get("/counselor/reports", { params });
+  return res.data as PaginatedResponse<CounselorReportItem>;
+}
+
+export async function submitReport(data: { overall_status: string; abnormal_cases?: string; key_students?: string; report_week?: string }) {
+  const res = await client.post("/counselor/reports", data);
+  return res.data;
+}
+
+export async function getLatestReports() {
+  const res = await client.get("/counselor/reports/latest");
+  return res.data as CounselorReportItem[];
+}
+
+// ── Weekly Assessment Management ──────────────────────────────
+
+export interface WeeklyAssessmentItem {
+  id: number;
+  student_id: string;
+  student_name: string;
+  department: string;
+  gender: string;
+  submit_date: string;
+  mood_score: number;
+  sleep_quality: number;
+  study_state: number;
+  social_state: number;
+  life_satisfaction: number;
+  overall_score: number;
+  sentiment_score: number | null;
+  message: string | null;
+  counselor_reply: string | null;
+}
+
+export interface WeeklyAssessmentDetail extends WeeklyAssessmentItem {
+  nlp_analysis?: {
+    sentiment_score: number;
+    sentiment_label: string;
+    keywords: [string, number][];
+    psychological_topics: Record<string, number>;
+    word_frequency: Record<string, number>;
+    token_count: number;
+    char_count: number;
+  };
+}
+
+export interface WeeklyAssessmentStats {
+  total: number;
+  with_message: number;
+  replied: number;
+  unreplied: number;
+  recent_7days: number;
+}
+
+export async function getWeeklyAssessments(params: Record<string, any> = {}) {
+  const res = await client.get("/counselor/weekly-assessments", { params });
+  return res.data as PaginatedResponse<WeeklyAssessmentItem>;
+}
+
+export async function getWeeklyAssessmentDetail(id: number) {
+  const res = await client.get(`/counselor/weekly-assessments/${id}`);
+  return res.data as WeeklyAssessmentDetail;
+}
+
+export async function replyWeeklyAssessment(id: number, reply: string) {
+  const res = await client.post(`/counselor/weekly-assessments/${id}/reply`, { reply });
+  return res.data;
+}
+
+export async function analyzeWeeklyMessage(id: number) {
+  const res = await client.post(`/counselor/weekly-assessments/${id}/analyze`);
+  return res.data;
+}
+
+export async function getWeeklyAssessmentStats() {
+  const res = await client.get("/counselor/weekly-assessments/stats");
+  return res.data as WeeklyAssessmentStats;
 }

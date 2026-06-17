@@ -229,29 +229,55 @@ export default function ClusterAnalysisPage() {
         </div>
       </div>
 
-      {/* 群体描述 */}
+      {/* 群体解读与干预建议 */}
       <div className="card" style={{ padding: 24 }}>
         <h3 style={{ marginBottom: 16 }}>💡 群体解读与干预建议</h3>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
           {clusters.map((c) => (
             <div key={c.cluster_id} style={{
-              padding: 16, borderRadius: 10,
+              padding: 20, borderRadius: 10,
               border: `1px solid ${CLUSTER_COLORS[c.cluster_id]}25`,
               background: `${CLUSTER_COLORS[c.cluster_id]}08`,
             }}>
-              <p style={{ fontWeight: 600, fontSize: 14, margin: "0 0 8px 0" }}>
-                {c.name}（{c.count}人）
+              <p style={{ fontWeight: 600, fontSize: 15, margin: "0 0 12px 0" }}>
+                {c.name}（{c.count}人，{c.percentage}%）
               </p>
-              <p style={{ fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.8, margin: 0 }}>
-                {c.features.stress_level >= 6.5 && c.features.sleep_duration <= 6
-                  ? "该群体压力较高、睡眠不足，建议重点关注心理健康，安排一对一辅导，制定减压计划。"
-                  : c.features.study_hours >= 7 && c.features.social_media_hours <= 4
-                  ? "该群体以学习为主，社交较少，建议适当增加运动和社交活动，平衡学习与生活。"
-                  : c.features.social_media_hours >= 5 && c.features.physical_activity >= 150
-                  ? "该群体社交活跃、运动充足，整体状态较好，可作为朋辈互助的骨干力量。"
-                  : "该群体各维度较为均衡，心理状态整体健康，建议保持良好的生活习惯。"
-                }
-              </p>
+
+              {/* 特征描述 */}
+              {c.traits && c.traits.length > 0 && (
+                <div style={{ marginBottom: 12 }}>
+                  <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", margin: "0 0 6px 0" }}>📊 特征画像</p>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {c.traits.map((t, i) => (
+                      <span key={i} style={{
+                        fontSize: 11, padding: "3px 10px", borderRadius: 12,
+                        background: "var(--bg-card)", border: "1px solid var(--border)",
+                        color: "var(--text-secondary)",
+                      }}>
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 干预建议 */}
+              {c.suggestions && c.suggestions.length > 0 && (
+                <div>
+                  <p style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", margin: "0 0 6px 0" }}>🎯 干预建议</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {c.suggestions.map((s, i) => (
+                      <p key={i} style={{
+                        fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.7,
+                        margin: 0, paddingLeft: 8,
+                        borderLeft: `3px solid ${CLUSTER_COLORS[c.cluster_id]}40`,
+                      }}>
+                        {s}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>

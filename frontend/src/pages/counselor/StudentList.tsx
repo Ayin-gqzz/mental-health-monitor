@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { getStudents, type StudentListItem } from "../../api/counselor";
 import { Search, ChevronLeft, ChevronRight } from "lucide-react";
 
-const DEPARTMENTS = ["", "理学", "工学", "医学", "商学", "艺术"];
+const GENDERS = ["", "Male", "Female"];
+const GENDER_LABELS: Record<string, string> = { Male: "男", Female: "女" };
 const RISK_LEVELS = ["", "high", "medium", "low"];
 const RISK_LABELS: Record<string, string> = { high: "高", medium: "中", low: "低" };
 const RISK_BADGE: Record<string, string> = { high: "danger", medium: "warning", low: "success" };
@@ -13,20 +14,20 @@ export default function StudentList() {
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [search, setSearch] = useState("");
-  const [department, setDepartment] = useState("");
+  const [gender, setGender] = useState("");
   const [riskLevel, setRiskLevel] = useState("");
   const navigate = useNavigate();
 
   useEffect(() => {
     const params: Record<string, any> = { page, page_size: 20 };
     if (search) params.search = search;
-    if (department) params.department = department;
+    if (gender) params.gender = gender;
     if (riskLevel) params.risk_level = riskLevel;
     getStudents(params).then((res) => {
       setStudents(res.items);
       setTotalPages(res.total_pages);
     });
-  }, [page, search, department, riskLevel]);
+  }, [page, search, gender, riskLevel]);
 
   return (
     <div>
@@ -50,8 +51,8 @@ export default function StudentList() {
             style={{ paddingLeft: 40 }}
           />
         </div>
-        <select value={department} onChange={(e) => { setDepartment(e.target.value); setPage(1); }} className="select" style={{ width: 140 }}>
-          {DEPARTMENTS.map((d) => <option key={d} value={d}>{d || "全部院系"}</option>)}
+        <select value={gender} onChange={(e) => { setGender(e.target.value); setPage(1); }} className="select" style={{ width: 140 }}>
+          {GENDERS.map((g) => <option key={g} value={g}>{g ? (GENDER_LABELS[g] || g) : "全部性别"}</option>)}
         </select>
         <select value={riskLevel} onChange={(e) => { setRiskLevel(e.target.value); setPage(1); }} className="select" style={{ width: 140 }}>
           {RISK_LEVELS.map((r) => <option key={r} value={r}>{r ? (RISK_LABELS[r] || r) : "全部风险"}</option>)}

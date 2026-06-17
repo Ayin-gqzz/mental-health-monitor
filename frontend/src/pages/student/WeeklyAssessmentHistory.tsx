@@ -111,7 +111,7 @@ export default function WeeklyAssessmentHistory() {
 
                 {item.counselor_reply && (
                   <div style={{ padding: 12, background: "#eef2ff", borderRadius: 8, fontSize: 13, color: "#4f6ef7", marginTop: 8 }}>
-                    👨‍🏫 辅导员回复：{item.counselor_reply}
+                    👨‍🏫 管理员回复：{item.counselor_reply}
                   </div>
                 )}
               </div>

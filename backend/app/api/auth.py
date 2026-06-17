@@ -51,10 +51,17 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
 def login_counselor(req: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(CounselorUser).filter(CounselorUser.username == req.username).first()
     if user and verify_password(req.password, user.password_hash):
-        token = create_token({"sub": str(user.id), "role": "counselor"})
+        token = create_token({
+            "sub": str(user.id),
+            "role": "counselor",
+            "department": user.department,
+            "is_admin": user.is_admin,
+        })
         return TokenResponse(
             access_token=token, role="counselor",
             display_name=user.display_name, user_id=str(user.id),
+            department=user.department,
+            is_admin=user.is_admin,
         )
     raise HTTPException(status_code=401, detail="Invalid credentials")
 
@@ -69,15 +76,22 @@ def register_counselor(req: CounselorRegisterRequest, db: Session = Depends(get_
         username=req.username,
         password_hash=hash_password(req.password),
         display_name=req.display_name,
+        department=req.department,
     )
     db.add(counselor)
     db.commit()
     db.refresh(counselor)
 
-    token = create_token({"sub": str(counselor.id), "role": "counselor"})
+    token = create_token({
+        "sub": str(counselor.id),
+        "role": "counselor",
+        "department": counselor.department,
+        "is_admin": False,
+    })
     return TokenResponse(
         access_token=token, role="counselor",
         display_name=counselor.display_name, user_id=str(counselor.id),
+        department=counselor.department,
     )
 
 
@@ -87,7 +101,7 @@ def change_counselor_password(
     user: dict = Depends(require_role("counselor")),
 ):
     db = user["db"]
-    counselor_id = int(user["sub"])
+    counselor_id = int(user["user_id"])
     counselor = db.query(CounselorUser).filter(CounselorUser.id == counselor_id).first()
     if not counselor:
         raise HTTPException(404, "Counselor not found")

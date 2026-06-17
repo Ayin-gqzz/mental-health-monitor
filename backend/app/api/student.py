@@ -244,6 +244,16 @@ def create_weekly_assessment(
         2,
     )
 
+    # 如果有留言，自动计算 NLP 情感分
+    sentiment_score = None
+    if req.message and req.message.strip():
+        try:
+            from app.services.nlp_service import PsychAssessmentEngine
+            engine = PsychAssessmentEngine()
+            sentiment_score = engine.analyze_sentiment(req.message)
+        except Exception:
+            pass
+
     record = WeeklyAssessment(
         student_id=sid,
         mood_score=req.mood_score,
@@ -253,6 +263,7 @@ def create_weekly_assessment(
         life_satisfaction=req.life_satisfaction,
         overall_score=overall,
         message=req.message,
+        sentiment_score=sentiment_score,
     )
     db.add(record)
     db.commit()

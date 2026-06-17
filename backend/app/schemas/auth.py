@@ -20,6 +20,7 @@ class CounselorRegisterRequest(BaseModel):
     username: str
     password: str
     display_name: str
+    department: str = ""
 
 
 class PasswordChangeRequest(BaseModel):
@@ -33,3 +34,5 @@ class TokenResponse(BaseModel):
     role: str
     display_name: str
     user_id: str
+    department: str = ""
+    is_admin: bool = False

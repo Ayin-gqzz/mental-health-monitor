@@ -1,21 +1,23 @@
 import { useEffect, useState } from "react";
-import { getOverviewStats, getDepartmentStats, getAlerts, type OverviewStats, type DepartmentStats } from "../../api/counselor";
+import { getOverviewStats, getDepartmentStats, getLatestReports, type OverviewStats, type DepartmentStats, type CounselorReportItem } from "../../api/counselor";
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { Users, AlertTriangle, Activity, TrendingUp, ArrowRight } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Users, AlertTriangle, Activity, TrendingUp, FileText } from "lucide-react";
+import { useAuthStore } from "../../stores/authStore";
 
 const RISK_COLORS: Record<string, string> = { high: "#ef4444", medium: "#f59e0b", low: "#22c55e" };
+const BAR_DEFAULT = "#4f6ef7";
+const BAR_HIGHLIGHT = "#f59e0b";
 
 export default function CounselorDashboard() {
   const [stats, setStats] = useState<OverviewStats | null>(null);
   const [deptStats, setDeptStats] = useState<DepartmentStats[]>([]);
-  const [alerts, setAlerts] = useState<any[]>([]);
-  const navigate = useNavigate();
+  const [latestReports, setLatestReports] = useState<CounselorReportItem[]>([]);
+  const myDept = useAuthStore((s) => s.department);
 
   useEffect(() => {
     getOverviewStats().then(setStats);
     getDepartmentStats().then(setDeptStats);
-    getAlerts(1, 5).then((r) => setAlerts(r.items));
+    getLatestReports().then(setLatestReports).catch(() => {});
   }, []);
 
   if (!stats) return (
@@ -33,7 +35,7 @@ export default function CounselorDashboard() {
   return (
     <div>
       <div className="page-header">
-        <h1>📊 辅导员工作台</h1>
+        <h1>📊 管理员工作台</h1>
         <p className="subtitle">学生心理健康数据总览和预警监控</p>
       </div>
 
@@ -77,51 +79,63 @@ export default function CounselorDashboard() {
                   borderRadius: "var(--radius-md)", boxShadow: "var(--shadow-md)",
                 }}
               />
-              <Bar dataKey="depression_rate" fill="#4f6ef7" name="抑郁率 (%)" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="depression_rate" name="抑郁率 (%)" radius={[6, 6, 0, 0]}>
+                {deptStats.map((d) => (
+                  <Cell key={d.department} fill={d.department === myDept ? BAR_HIGHLIGHT : BAR_DEFAULT} />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
       </div>
 
-      {/* Recent Alerts */}
+      {/* 各学院辅导员汇报 */}
       <div className="card" style={{ overflow: "hidden" }}>
         <div style={{
-          display: "flex", justifyContent: "space-between", alignItems: "center",
+          display: "flex", alignItems: "center", gap: 8,
           padding: "18px 20px", borderBottom: "1px solid var(--border-light)",
         }}>
-          <h3 style={{ margin: 0 }}>🚨 近期高风险预警</h3>
-          <button
-            className="btn btn-ghost btn-sm"
-            onClick={() => navigate("/counselor/alerts")}
-          >
-            查看全部 <ArrowRight size={14} />
-          </button>
+          <FileText size={18} />
+          <h3 style={{ margin: 0 }}>各学院工作汇报</h3>
         </div>
-        <table className="data-table">
-          <thead>
-            <tr>
-              {["学号", "姓名", "院系", "概率", "日期"].map((h) => (
-                <th key={h}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {alerts.map((a: any) => (
-              <tr key={a.student_id} style={{ cursor: "pointer" }} onClick={() => navigate(`/counselor/students/${a.student_id}`)}>
-                <td style={{ fontWeight: 500 }}>{a.student_id}</td>
-                <td>{a.name}</td>
-                <td>{a.department}</td>
-                <td style={{ color: "var(--danger)", fontWeight: 600 }}>{(a.depression_probability * 100).toFixed(1)}%</td>
-                <td style={{ color: "var(--text-muted)", fontSize: 12 }}>{a.assessment_date}</td>
-              </tr>
+        {latestReports.length > 0 ? (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 16, padding: 20 }}>
+            {latestReports.map((r) => (
+              <div key={r.id} style={{
+                border: "1px solid var(--border)",
+                borderRadius: "var(--radius-md)",
+                padding: 16,
+                background: r.department === myDept ? "rgba(245,158,11,0.04)" : "var(--bg-card)",
+                borderColor: r.department === myDept ? "rgba(245,158,11,0.3)" : "var(--border)",
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                  <span style={{ fontWeight: 600, fontSize: 14 }}>{r.department}</span>
+                  <span className="badge badge-warning" style={{ fontSize: 11 }}>{r.report_week}</span>
+                </div>
+                <p style={{ fontSize: 13, lineHeight: 1.6, margin: "0 0 8px", whiteSpace: "pre-wrap" }}>
+                  {r.overall_status}
+                </p>
+                {r.abnormal_cases && (
+                  <p style={{ fontSize: 12, color: "var(--danger)", margin: "0 0 6px" }}>
+                    ⚠️ {r.abnormal_cases}
+                  </p>
+                )}
+                {r.key_students && (
+                  <p style={{ fontSize: 12, color: "var(--warning)", margin: "0 0 6px" }}>
+                    👁️ {r.key_students}
+                  </p>
+                )}
+                <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0, textAlign: "right" }}>
+                  {r.counselor_name} · {r.created_at ? new Date(r.created_at).toLocaleDateString("zh-CN") : ""}
+                </p>
+              </div>
             ))}
-            {alerts.length === 0 && (
-              <tr>
-                <td colSpan={5} className="empty-state" style={{ padding: 40 }}>暂无预警</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+          </div>
+        ) : (
+          <div className="empty-state" style={{ padding: 40, textAlign: "center" }}>
+            <p>暂无工作汇报</p>
+          </div>
+        )}
       </div>
     </div>
   );
