@@ -979,9 +979,9 @@ def get_cluster_analysis(user: dict = Depends(require_role("counselor"))):
         def _level(val, mean, std):
             """返回 'high' / 'medium' / 'low'，基于偏离标准差的程度"""
             z = (val - mean) / std
-            if z > 0.6:
+            if z >= 0.5:
                 return "high"
-            elif z < -0.6:
+            elif z <= -0.5:
                 return "low"
             return "medium"
 
@@ -993,7 +993,7 @@ def get_cluster_analysis(user: dict = Depends(require_role("counselor"))):
             ml = _level(social, g_mean[3], g_std[3])
             al = _level(activity, g_mean[4], g_std[4])
 
-            # ── 群体名称（16 种组合） ──
+            # ── 群体名称（20+ 种组合） ──
             if sl == "high" and dl == "low":
                 name, emoji = "高压失眠型", "🔴"
             elif sl == "high" and ml == "high":
@@ -1006,12 +1006,26 @@ def get_cluster_analysis(user: dict = Depends(require_role("counselor"))):
                 name, emoji = "作息紊乱型", "🟠"
             elif dl == "low" and hl == "high":
                 name, emoji = "熬夜苦读型", "🟡"
+            elif dl == "low" and sl == "low":
+                name, emoji = "睡眠不足型", "🟡"
+            elif dl == "low":
+                name, emoji = "睡眠欠佳型", "🟠"
+            elif dl == "high" and sl == "low":
+                name, emoji = "睡眠充足型", "🟢"
+            elif dl == "high" and al == "high":
+                name, emoji = "健康阳光型", "🟢"
+            elif dl == "high":
+                name, emoji = "睡眠充裕型", "🟢"
             elif hl == "high" and ml == "low" and al == "low":
                 name, emoji = "埋头苦学型", "🔵"
             elif hl == "high" and ml == "low":
                 name, emoji = "学业专注型", "🔵"
             elif hl == "high" and al == "high":
                 name, emoji = "全面发展型", "🟢"
+            elif hl == "low" and al == "high":
+                name, emoji = "运动达人型", "🟢"
+            elif hl == "low" and sl == "low":
+                name, emoji = "轻松休闲型", "🟡"
             elif ml == "high" and al == "high":
                 name, emoji = "社交运动型", "🟡"
             elif ml == "high" and al == "low":
@@ -1022,8 +1036,10 @@ def get_cluster_analysis(user: dict = Depends(require_role("counselor"))):
                 name, emoji = "运动达人型", "🟢"
             elif al == "low" and sl == "low" and dl == "high":
                 name, emoji = "安逸宅居型", "🟡"
-            elif sl == "low" and dl == "high" and al == "high":
-                name, emoji = "健康阳光型", "🟢"
+            elif al == "low":
+                name, emoji = "缺乏运动型", "🟠"
+            elif sl == "low" and dl == "medium":
+                name, emoji = "平稳发展型", "🟢"
             else:
                 name, emoji = "普通均衡型", "🟢"
 
