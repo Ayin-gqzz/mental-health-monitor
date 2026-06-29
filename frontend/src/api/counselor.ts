@@ -319,6 +319,7 @@ export interface WeeklyAssessmentItem {
   overall_score: number;
   sentiment_score: number | null;
   message: string | null;
+  ai_reply: string | null;
   counselor_reply: string | null;
 }
 

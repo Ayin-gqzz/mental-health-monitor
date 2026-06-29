@@ -8,6 +8,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/student/assessments": "评估记录",
   "/student/weekly-assessment": "心理测评",
   "/student/weekly-history": "测评记录",
+  "/student/psych-chat": "心理咨询",
   "/counselor": "管理员工作台",
   "/counselor/students": "学生管理",
   "/counselor/statistics": "统计分析",

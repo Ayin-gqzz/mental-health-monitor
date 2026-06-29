@@ -81,7 +81,15 @@ export default function WeeklyAssessmentPage() {
         <CheckCircle size={64} style={{ color: "#22c55e", marginBottom: 20 }} />
         <h1 style={{ marginBottom: 8 }}>提交成功！</h1>
         <p style={{ color: "#64748b", marginBottom: 8 }}>感谢你的心理测评</p>
-        <p style={{ color: "#64748b", marginBottom: 24 }}>综合评分：<strong style={{ color: COLORS[Math.round(Number(overall))] }}>{overall}</strong> / 5.0</p>
+        <p style={{ color: "#64748b", marginBottom: 16 }}>综合评分：<strong style={{ color: COLORS[Math.round(Number(overall))] }}>{overall}</strong> / 5.0</p>
+        {message && (
+          <div style={{
+            padding: "12px 16px", background: "#f5f3ff", borderRadius: 8, marginBottom: 24,
+            border: "1px solid #ddd6fe", fontSize: 13, color: "#5b21b6",
+          }}>
+            ✨ AI 心理助手正在为你生成回复，请在「测评记录」中查看
+          </div>
+        )}
         <button className="btn btn-primary" onClick={() => navigate("/student")}>返回首页</button>
       </div>
     );

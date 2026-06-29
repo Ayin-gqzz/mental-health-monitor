@@ -59,11 +59,12 @@ export default function StatisticsPage() {
             <LineChart data={trends}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
               <XAxis dataKey="week" fontSize={11} stroke="var(--text-muted)" />
-              <YAxis fontSize={11} stroke="var(--text-muted)" />
+              <YAxis yAxisId="left" fontSize={11} stroke="var(--text-muted)" domain={[0, 10]} label={{ value: "压力", angle: -90, position: "insideLeft", fontSize: 11 }} />
+              <YAxis yAxisId="right" orientation="right" fontSize={11} stroke="var(--text-muted)" label={{ value: "人数", angle: 90, position: "insideRight", fontSize: 11 }} />
               <Tooltip contentStyle={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)", boxShadow: "var(--shadow-md)" }} />
               <Legend />
-              <Line type="monotone" dataKey="avg_stress" stroke="#ef4444" name="平均压力" strokeWidth={2.5} dot={{ r: 3 }} />
-              <Line type="monotone" dataKey="depression_count" stroke="#8b5cf6" name="抑郁人数" strokeWidth={2.5} dot={{ r: 3 }} />
+              <Line yAxisId="left" type="monotone" dataKey="avg_stress" stroke="#ef4444" name="平均压力" strokeWidth={2.5} dot={{ r: 3 }} />
+              <Line yAxisId="right" type="monotone" dataKey="depression_count" stroke="#8b5cf6" name="抑郁人数" strokeWidth={2.5} dot={{ r: 3 }} />
             </LineChart>
           </ResponsiveContainer>
         </div>

@@ -25,6 +25,7 @@ class WeeklyAssessmentOut(BaseModel):
     life_satisfaction: int
     overall_score: float
     message: Optional[str] = None
+    ai_reply: Optional[str] = None
     counselor_reply: Optional[str] = None
     created_at: Optional[datetime] = None
 
@@ -41,4 +42,5 @@ class WeeklyAssessmentLatestOut(BaseModel):
     life_satisfaction: int
     overall_score: float
     message: Optional[str] = None
+    ai_reply: Optional[str] = None
     counselor_reply: Optional[str] = None

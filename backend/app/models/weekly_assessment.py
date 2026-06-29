@@ -20,6 +20,7 @@ class WeeklyAssessment(Base):
 
     # 留言
     message = Column(Text, nullable=True)                  # 学生留言
+    ai_reply = Column(Text, nullable=True)                 # AI 助手回复
     counselor_reply = Column(Text, nullable=True)          # 辅导员回复
     sentiment_score = Column(Float, nullable=True)         # NLP 情感得分 (0.0消极 ~ 1.0积极)
 

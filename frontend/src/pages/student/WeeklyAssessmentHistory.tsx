@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getWeeklyAssessments, type WeeklyAssessment } from "../../api/student";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Sparkles } from "lucide-react";
 
 const COLORS = ["", "#ef4444", "#f97316", "#f59e0b", "#22c55e", "#10b981"];
 const DIM_NAMES = ["情绪", "睡眠", "学习", "社交", "满意度"];
@@ -109,9 +109,18 @@ export default function WeeklyAssessmentHistory() {
                   </div>
                 )}
 
+                {item.ai_reply && (
+                  <div style={{ padding: 12, background: "linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)", borderRadius: 8, fontSize: 13, color: "#5b21b6", marginTop: 8, border: "1px solid #ddd6fe" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6, fontWeight: 600, fontSize: 12 }}>
+                      <Sparkles size={14} /> AI 心理助手
+                    </div>
+                    <div style={{ whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{item.ai_reply}</div>
+                  </div>
+                )}
+
                 {item.counselor_reply && (
                   <div style={{ padding: 12, background: "#eef2ff", borderRadius: 8, fontSize: 13, color: "#4f6ef7", marginTop: 8 }}>
-                    👨‍🏫 管理员回复：{item.counselor_reply}
+                    👨‍🏫 辅导员回复：{item.counselor_reply}
                   </div>
                 )}
               </div>

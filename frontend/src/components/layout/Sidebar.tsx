@@ -5,7 +5,7 @@ import { getUnreadCount } from "../../api/counselor";
 import {
   LayoutDashboard, Activity, ClipboardList, Users, BarChart3, AlertTriangle, LogOut,
   FlaskConical, KeyRound, UserPlus, Brain, ChevronLeft, ChevronRight,
-  ClipboardCheck, History, UserSearch, MessageSquare, FileText,
+  ClipboardCheck, History, UserSearch, MessageSquare, FileText, Heart,
 } from "lucide-react";
 
 const studentLinks = [
@@ -14,6 +14,7 @@ const studentLinks = [
   { path: "/student/assessments", label: "评估记录", icon: ClipboardList },
   { path: "/student/weekly-assessment", label: "心理测评", icon: ClipboardCheck },
   { path: "/student/weekly-history", label: "测评记录", icon: History },
+  { path: "/student/psych-chat", label: "心理咨询", icon: Heart },
 ];
 
 const adminLinks = [

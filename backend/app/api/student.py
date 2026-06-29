@@ -254,6 +254,59 @@ def create_weekly_assessment(
         except Exception:
             pass
 
+    # 如果有留言，调用 AI 生成回复
+    ai_reply = None
+    if req.message and req.message.strip():
+        try:
+            from app.core.config import settings
+            if settings.LLM_API_KEY:
+                import httpx as _httpx
+
+                # 获取学生信息
+                student = db.query(StudentInfo).filter(StudentInfo.student_id == sid).first()
+                student_name = student.name if student else sid
+
+                system_prompt = """你是一位专业的大学心理咨询师，正在回复学生的心理测评留言。
+
+你的回复需要：
+1. 表达真诚的关心和理解，让学生感到被倾听
+2. 对学生的情绪表示共情，不要简单否定或淡化
+3. 给出具体、可操作的建议（2-3 条）
+4. 语气温暖、专业，避免说教
+5. 如果学生表达了严重的心理困扰（如自伤想法），要明确建议寻求专业帮助
+6. 回复控制在 200-300 字以内
+
+注意：
+- 不要以"亲爱的同学"等过于正式的开头
+- 不要重复学生的话
+- 要有针对性地回应学生的具体问题"""
+
+                user_message = f"【学生信息】{student_name}（{sid}）\n"
+                user_message += f"【测评数据】情绪{req.mood_score}/5 睡眠{req.sleep_quality}/5 学习{req.study_state}/5 社交{req.social_state}/5 满意度{req.life_satisfaction}/5 综合{overall}\n\n"
+                user_message += f"【学生留言】\n{req.message}"
+
+                with _httpx.Client(timeout=30) as client:
+                    resp = client.post(
+                        f"{settings.LLM_BASE_URL}/chat/completions",
+                        headers={
+                            "Authorization": f"Bearer {settings.LLM_API_KEY}",
+                            "Content-Type": "application/json",
+                        },
+                        json={
+                            "model": "mimo-v2.5",
+                            "messages": [
+                                {"role": "system", "content": system_prompt},
+                                {"role": "user", "content": user_message},
+                            ],
+                            "max_tokens": 800,
+                            "temperature": 0.7,
+                        },
+                    )
+                    if resp.status_code == 200:
+                        ai_reply = resp.json()["choices"][0]["message"]["content"].strip()
+        except Exception:
+            pass
+
     record = WeeklyAssessment(
         student_id=sid,
         mood_score=req.mood_score,
@@ -263,6 +316,7 @@ def create_weekly_assessment(
         life_satisfaction=req.life_satisfaction,
         overall_score=overall,
         message=req.message,
+        ai_reply=ai_reply,
         sentiment_score=sentiment_score,
     )
     db.add(record)

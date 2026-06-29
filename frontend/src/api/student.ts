@@ -38,6 +38,7 @@ export interface WeeklyAssessment {
   life_satisfaction: number;
   overall_score: number;
   message: string | null;
+  ai_reply: string | null;
   counselor_reply: string | null;
   created_at: string;
 }
@@ -51,6 +52,7 @@ export interface WeeklyAssessmentLatest {
   life_satisfaction: number;
   overall_score: number;
   message: string | null;
+  ai_reply: string | null;
   counselor_reply: string | null;
 }
 

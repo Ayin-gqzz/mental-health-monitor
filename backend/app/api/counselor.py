@@ -1301,6 +1301,7 @@ def list_weekly_assessments(
         WeeklyAssessment.life_satisfaction,
         WeeklyAssessment.overall_score,
         WeeklyAssessment.message,
+        WeeklyAssessment.ai_reply,
         WeeklyAssessment.counselor_reply,
         WeeklyAssessment.sentiment_score,
         StudentInfo.name,
@@ -1345,6 +1346,7 @@ def list_weekly_assessments(
             "life_satisfaction": r.life_satisfaction,
             "overall_score": r.overall_score,
             "message": r.message,
+            "ai_reply": r.ai_reply,
             "counselor_reply": r.counselor_reply,
             "sentiment_score": r.sentiment_score,
         })
@@ -1391,6 +1393,7 @@ def get_weekly_assessment_detail(
         "life_satisfaction": wa.life_satisfaction,
         "overall_score": wa.overall_score,
         "message": wa.message,
+        "ai_reply": wa.ai_reply,
         "counselor_reply": wa.counselor_reply,
     }
 

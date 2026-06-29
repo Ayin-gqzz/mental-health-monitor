@@ -11,7 +11,7 @@ import {
 import { useAuthStore } from "../../stores/authStore";
 import {
   MessageSquare, Send, ChevronLeft, ChevronRight, Brain,
-  TrendingUp, TrendingDown, Minus, X,
+  TrendingUp, TrendingDown, Minus, X, Sparkles,
 } from "lucide-react";
 
 const SCORE_COLORS: Record<number, string> = {
@@ -347,6 +347,22 @@ export default function WeeklyReviewPage() {
                       ))}
                     </div>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* AI Reply (read-only) */}
+            {selected.ai_reply && (
+              <div style={{ marginBottom: 20 }}>
+                <h3 style={{ fontSize: 14, marginBottom: 8, display: "flex", alignItems: "center", gap: 6, color: "#7c3aed" }}>
+                  <Sparkles size={16} /> AI 心理助手回复
+                </h3>
+                <div style={{
+                  padding: 16, background: "linear-gradient(135deg, #f5f3ff 0%, #ede9fe 100%)",
+                  borderRadius: "var(--radius-md)", fontSize: 14, lineHeight: 1.7,
+                  color: "#5b21b6", border: "1px solid #ddd6fe", whiteSpace: "pre-wrap",
+                }}>
+                  {selected.ai_reply}
                 </div>
               </div>
             )}

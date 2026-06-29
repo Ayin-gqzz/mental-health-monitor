@@ -42,6 +42,11 @@ async def lifespan(app: FastAPI):
         # 将默认辅导员账号设为 admin
         conn.execute(text("UPDATE counselor_user SET is_admin = 1 WHERE username = 'counselor'"))
 
+        # AI 回复：给 weekly_assessment 表加 ai_reply 列
+        if not _col_exists("weekly_assessment", "ai_reply"):
+            conn.execute(text("ALTER TABLE weekly_assessment ADD COLUMN ai_reply TEXT"))
+            print("[migrate] Added ai_reply to weekly_assessment.")
+
         for idx_sql in [
             # 已有的索引
             "CREATE INDEX IF NOT EXISTS idx_assess_student_date_desc ON mental_assessment(student_id, assessment_date DESC)",
